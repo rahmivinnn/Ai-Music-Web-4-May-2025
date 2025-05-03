@@ -6,6 +6,7 @@ import { useState, useRef } from "react"
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Play, Pause, Download, Share2 } from "lucide-react"
+import { toast } from "@/components/ui/use-toast"
 
 interface Track {
   id: string
@@ -63,6 +64,11 @@ export function EdmAiPlaylist() {
       if (playPromise !== undefined) {
         playPromise.catch((error) => {
           console.error("Audio playback failed:", error)
+          toast({
+            title: "Playback Failed",
+            description: "Could not play the audio. Please try again.",
+            variant: "destructive",
+          })
         })
       }
       setPlayingId(trackId)
@@ -77,56 +83,103 @@ export function EdmAiPlaylist() {
 
   const downloadTrack = (track: Track) => {
     try {
-      // Create an anchor element for download
-      const downloadLink = document.createElement("a")
-      downloadLink.href = track.audioSrc
-      downloadLink.download = `${track.title}.mp3`
-      document.body.appendChild(downloadLink)
-      downloadLink.click()
+      // Fetch and download using Blob
+      fetch(track.audioSrc)
+        .then((response) => response.blob())
+        .then((blob) => {
+          // Create blob URL
+          const blobUrl = URL.createObjectURL(blob)
 
-      // Cleanup
-      setTimeout(() => {
-        document.body.removeChild(downloadLink)
-      }, 100)
+          // Create anchor element for download
+          const downloadLink = document.createElement("a")
+          downloadLink.href = blobUrl
+          downloadLink.download = `${track.title}.mp3`
+          document.body.appendChild(downloadLink)
+          downloadLink.click()
+
+          // Cleanup
+          setTimeout(() => {
+            document.body.removeChild(downloadLink)
+            URL.revokeObjectURL(blobUrl)
+          }, 100)
+
+          toast({
+            title: "Download Started",
+            description: `${track.title} is downloading...`,
+          })
+        })
+        .catch((error) => {
+          console.error("Download failed:", error)
+          toast({
+            title: "Download Failed",
+            description: "Couldn't download the track. Please try again.",
+            variant: "destructive",
+          })
+        })
     } catch (error) {
       console.error("Download error:", error)
-      alert("Failed to download track")
+      toast({
+        title: "Download Error",
+        description: "There was a problem downloading the track.",
+        variant: "destructive",
+      })
     }
   }
 
+  // Implement share functionality
   const shareTrack = async (track: Track) => {
-    try {
-      // Cek apakah Web Share API tersedia
-      if (navigator.share) {
-        // Buat file untuk dibagikan
-        const response = await fetch(track.audioSrc)
-        const blob = await response.blob()
-        const file = new File([blob], `${track.title}.mp3`, { type: "audio/mpeg" })
-
-        await navigator.share({
-          title: `Check out "${track.title}"!`,
-          text: `I found this awesome EDM track: ${track.title}`,
-          files: [file],
-        })
-      } else {
-        // Fallback jika Web Share API tidak tersedia
-        // Salin link ke clipboard
-        const shareText = `Check out this awesome EDM track: ${track.title}`
-        await navigator.clipboard.writeText(shareText)
-
-        alert("Share link copied to clipboard")
-      }
-    } catch (error) {
-      console.error("Share error:", error)
-
-      // Fallback jika sharing gagal
+    // Check if Web Share API is supported
+    if (navigator.share) {
       try {
-        const shareText = `Check out this awesome EDM track: ${track.title}`
-        await navigator.clipboard.writeText(shareText)
-        alert("Share link copied to clipboard")
-      } catch (clipboardError) {
-        alert("Failed to share track")
+        await navigator.share({
+          title: track.title,
+          text: `Check out this EDM track: ${track.title}`,
+          url: window.location.href,
+        })
+
+        toast({
+          title: "Shared Successfully",
+          description: "Track has been shared!",
+        })
+      } catch (error) {
+        console.error("Sharing failed:", error)
+
+        // Fall back to copying to clipboard
+        copyTrackLinkToClipboard(track)
       }
+    } else {
+      // If Web Share API not supported, copy to clipboard
+      copyTrackLinkToClipboard(track)
+    }
+  }
+
+  // Helper function to copy link to clipboard
+  const copyTrackLinkToClipboard = (track: Track) => {
+    try {
+      const shareUrl = `${window.location.origin}/share/track/${track.id}`
+      navigator.clipboard.writeText(shareUrl).then(
+        () => {
+          toast({
+            title: "Link Copied",
+            description: "Track link copied to clipboard!",
+          })
+        },
+        (err) => {
+          console.error("Could not copy text: ", err)
+          toast({
+            title: "Copy Failed",
+            description: "Could not copy link to clipboard.",
+            variant: "destructive",
+          })
+        },
+      )
+    } catch (error) {
+      console.error("Clipboard API not available:", error)
+      toast({
+        title: "Share Failed",
+        description: "Sharing is not supported in your browser.",
+        variant: "destructive",
+      })
     }
   }
 
@@ -195,7 +248,7 @@ export function EdmAiPlaylist() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-gray-500 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-900/30"
+                  className="text-cyan-500 hover:text-cyan-600 hover:bg-cyan-100 dark:hover:bg-cyan-900/30"
                   onClick={() => shareTrack(track)}
                 >
                   <Share2 className="h-4 w-4 mr-2" />

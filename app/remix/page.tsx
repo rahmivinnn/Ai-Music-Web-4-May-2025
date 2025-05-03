@@ -1063,29 +1063,7 @@ export default function RemixPage() {
     }
 
     try {
-      // Jika ada audioUrl, gunakan cara langsung yang lebih sederhana
-      if (audioUrl) {
-        const a = document.createElement("a")
-        a.style.display = "none"
-        a.href = audioUrl
-        a.download = audioFile ? audioFile.name : "remix-" + new Date().getTime() + ".mp3"
-        document.body.appendChild(a)
-        a.click()
-
-        // Cleanup
-        setTimeout(() => {
-          document.body.removeChild(a)
-          window.URL.revokeObjectURL(audioUrl)
-        }, 100)
-
-        toast({
-          title: "Success",
-          description: "Audio downloaded successfully",
-        })
-        return
-      }
-
-      // Jika tidak ada audioUrl, gunakan metode offline rendering
+      // Buat offline audio context untuk render audio dengan efek
       const offlineCtx = new OfflineAudioContext(
         audioBuffer.numberOfChannels,
         audioBuffer.length,
@@ -1143,17 +1121,13 @@ export default function RemixPage() {
           const a = document.createElement("a")
           a.style.display = "none"
           a.href = url
-          a.download = audioFile
-            ? audioFile.name.replace(/\.[^/.]+$/, "") + ".wav"
-            : "remix-" + new Date().getTime() + ".wav"
+          a.download = "remix-" + new Date().getTime() + ".wav"
           document.body.appendChild(a)
           a.click()
 
           // Cleanup
-          setTimeout(() => {
-            document.body.removeChild(a)
-            window.URL.revokeObjectURL(url)
-          }, 100)
+          window.URL.revokeObjectURL(url)
+          document.body.removeChild(a)
 
           toast({
             title: "Success",
@@ -1175,68 +1149,6 @@ export default function RemixPage() {
         description: "Failed to download audio",
         variant: "destructive",
       })
-    }
-  }
-
-  // Tambahkan fungsi handleShare
-  const handleShare = async () => {
-    if (!audioFile) {
-      toast({
-        title: "Error",
-        description: "No audio to share",
-        variant: "destructive",
-      })
-      return
-    }
-
-    try {
-      // Cek apakah Web Share API tersedia
-      if (navigator.share) {
-        // Buat file untuk dibagikan
-        const fileToShare = audioUrl
-          ? new File([await (await fetch(audioUrl)).blob()], audioFile.name || "remix.mp3", { type: "audio/mpeg" })
-          : audioFile
-
-        await navigator.share({
-          title: "Check out my EDM remix!",
-          text: "I created this remix using Web Music AI Platform",
-          files: [fileToShare],
-        })
-
-        toast({
-          title: "Success",
-          description: "Audio shared successfully",
-        })
-      } else {
-        // Fallback jika Web Share API tidak tersedia
-        // Salin link ke clipboard (dalam kasus nyata, ini akan menjadi URL yang dapat dibagikan)
-        const shareText = "Check out my EDM remix created with Web Music AI Platform!"
-        await navigator.clipboard.writeText(shareText)
-
-        toast({
-          title: "Link Copied",
-          description: "Share link copied to clipboard",
-        })
-      }
-    } catch (error) {
-      console.error("Share error:", error)
-
-      // Fallback jika sharing gagal
-      try {
-        const shareText = "Check out my EDM remix created with Web Music AI Platform!"
-        await navigator.clipboard.writeText(shareText)
-
-        toast({
-          title: "Link Copied",
-          description: "Share link copied to clipboard",
-        })
-      } catch (clipboardError) {
-        toast({
-          title: "Error",
-          description: "Failed to share audio",
-          variant: "destructive",
-        })
-      }
     }
   }
 
@@ -1347,6 +1259,72 @@ export default function RemixPage() {
         description: "Remix generated successfully!",
       })
     }, 3000)
+  }
+
+  // Fungsi untuk berbagi audio
+  const handleShare = async () => {
+    if (!audioBuffer || !audioFile) {
+      toast({
+        title: "Error",
+        description: "No audio to share",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Cek apakah Web Share API didukung
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "My EDM Remix",
+          text: "Check out this EDM remix I created!",
+          url: window.location.href,
+        })
+
+        toast({
+          title: "Shared Successfully",
+          description: "Your remix has been shared!",
+        })
+      } catch (error) {
+        console.error("Sharing failed:", error)
+
+        // Fallback ke clipboard
+        copyRemixLinkToClipboard()
+      }
+    } else {
+      // Jika Web Share API tidak didukung, salin ke clipboard
+      copyRemixLinkToClipboard()
+    }
+  }
+
+  // Helper function untuk menyalin link ke clipboard
+  const copyRemixLinkToClipboard = () => {
+    try {
+      const shareUrl = window.location.href
+      navigator.clipboard.writeText(shareUrl).then(
+        () => {
+          toast({
+            title: "Link Copied",
+            description: "Remix link copied to clipboard!",
+          })
+        },
+        (err) => {
+          console.error("Could not copy text: ", err)
+          toast({
+            title: "Copy Failed",
+            description: "Could not copy link to clipboard.",
+            variant: "destructive",
+          })
+        },
+      )
+    } catch (error) {
+      console.error("Clipboard API not available:", error)
+      toast({
+        title: "Share Failed",
+        description: "Sharing is not supported in your browser.",
+        variant: "destructive",
+      })
+    }
   }
 
   return (

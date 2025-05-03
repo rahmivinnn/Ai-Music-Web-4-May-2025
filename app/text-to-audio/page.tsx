@@ -13,7 +13,6 @@ import { Toaster } from "@/components/ui/toaster"
 import { EdmPresets } from "@/components/edm-presets"
 import { generateAudio } from "@/app/actions/audio-actions"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 export default function TextToAudioPage() {
   const [prompt, setPrompt] = useState("")
@@ -51,7 +50,7 @@ export default function TextToAudioPage() {
   const [currentVoice, setCurrentVoice] = useState("alloy")
   const [currentModel, setCurrentModel] = useState("tts-1")
   const [currentStyle, setCurrentStyle] = useState("neutral")
-  const [activeTab, setActiveTab] = useState("generator")
+  const [activeTab, setActiveTab] = useState("voice")
 
   const animationRef = useRef(null)
   const convolutionBuffer = useRef(null)
@@ -355,332 +354,281 @@ export default function TextToAudioPage() {
   return (
     <div className="container py-8">
       <Toaster />
-      <h1 className="text-3xl font-bold mb-2">Text to Audio Converter</h1>
-      <p className="text-zinc-400 mb-8">Convert text to speech with various voices and EDM effects</p>
+      <h1 className="mb-2 text-3xl font-bold">Describe Your Remix & Let Composition converter Create!</h1>
+      <p className="mb-8 text-zinc-400">Enter a prompt, set the BPM, and select a genre to generate your remix.</p>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid grid-cols-3 mb-8">
-          <TabsTrigger value="generator">Text to Audio</TabsTrigger>
-          <TabsTrigger value="history">Generation History</TabsTrigger>
-          <TabsTrigger value="presets">Voice Presets</TabsTrigger>
-        </TabsList>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-1 bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
+          <h2 className="text-xl font-semibold mb-4">Text to Audio</h2>
+          <TextToAudioGenerator onGenerate={handleTextToAudio} isProcessing={isProcessing} />
 
-        <TabsContent value="generator">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-1 bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-              <h2 className="text-xl font-semibold mb-4">Text to Audio</h2>
-              <TextToAudioGenerator
-                onGenerate={handleTextToAudio}
-                isProcessing={isProcessing}
-                currentVoice={currentVoice}
-                currentModel={currentModel}
-                currentStyle={currentStyle}
-                setCurrentVoice={setCurrentVoice}
-                setCurrentModel={setCurrentModel}
-                setCurrentStyle={setCurrentStyle}
-                voiceDescriptions={voiceDescriptions}
-                styleDescriptions={styleDescriptions}
-              />
-
-              {generatedAudio && (
-                <div className="mt-6">
-                  <h3 className="text-lg font-medium mb-2">Generated Track</h3>
-                  <div className="bg-zinc-800/50 rounded-lg p-4">
-                    <p className="text-zinc-300 truncate">{generatedAudio.name}</p>
-                    <div className="mt-3 flex justify-between items-center">
-                      <span className="text-sm text-zinc-500">{formatTime(duration || 0)}</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-cyan-400 hover:text-cyan-300"
-                        onClick={() => {
-                          setIsProcessing(true)
-                          setTimeout(() => {
-                            handleTextToAudio(prompt)
-                          }, 500)
-                        }}
-                      >
-                        Regenerate
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="mt-6">
-                <h3 className="text-lg font-medium mb-3">Suggested Prompts</h3>
-                <div className="space-y-2">
-                  {[
-                    "Upbeat electronic dance track with synth leads",
-                    "Lo-fi hip hop beat with piano samples",
-                    "Ambient soundscape with nature sounds",
-                    "Cinematic orchestral theme with dramatic drums",
-                    "Jazz piano solo with smooth bass",
-                    "Acoustic guitar folk melody",
-                  ].map((promptText, index) => (
-                    <Button
-                      key={index}
-                      variant="outline"
-                      size="sm"
-                      className="w-full justify-start text-left border-zinc-700 text-zinc-300 hover:bg-zinc-800"
-                      onClick={() => handleTextToAudio(promptText)}
-                    >
-                      {promptText}
-                    </Button>
-                  ))}
+          {generatedAudio && (
+            <div className="mt-6">
+              <h3 className="text-lg font-medium mb-2">Generated Track</h3>
+              <div className="bg-zinc-800/50 rounded-lg p-4">
+                <p className="text-zinc-300 truncate">{generatedAudio.name}</p>
+                <div className="mt-3 flex justify-between items-center">
+                  <span className="text-sm text-zinc-500">{formatTime(duration || 0)}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-cyan-400 hover:text-cyan-300"
+                    onClick={() => {
+                      setIsProcessing(true)
+                      setTimeout(() => {
+                        handleTextToAudio(prompt)
+                      }, 500)
+                    }}
+                  >
+                    Regenerate
+                  </Button>
                 </div>
               </div>
             </div>
+          )}
 
-            <div className="lg:col-span-2 space-y-6">
-              <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-                <h2 className="text-xl font-semibold mb-4">Audio Preview</h2>
+          <div className="mt-6">
+            <h3 className="text-lg font-medium mb-3">Suggested Prompts</h3>
+            <div className="space-y-2">
+              {[
+                "Upbeat electronic dance track with synth leads",
+                "Lo-fi hip hop beat with piano samples",
+                "Ambient soundscape with nature sounds",
+                "Cinematic orchestral theme with dramatic drums",
+                "Jazz piano solo with smooth bass",
+                "Acoustic guitar folk melody",
+              ].map((promptText, index) => (
+                <Button
+                  key={index}
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start text-left border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                  onClick={() => handleTextToAudio(promptText)}
+                >
+                  {promptText}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </div>
 
-                <AudioVisualizer
-                  isPlaying={isPlaying}
-                  audioFile={generatedAudio}
-                  analyserNode={analyserNode}
-                  currentTime={currentTime}
-                  duration={duration}
-                />
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
+            <h2 className="text-xl font-semibold mb-4">Audio Preview</h2>
 
-                <div className="mt-6 flex justify-center items-center gap-4">
-                  <Button
-                    onClick={togglePlay}
-                    disabled={!audioBuffer}
-                    className="bg-cyan-600 hover:bg-cyan-700 rounded-full h-12 w-12 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 ml-1" />}
-                  </Button>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-zinc-400 hover:text-white"
-                      onClick={handleMuteToggle}
-                    >
-                      {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
-                    </Button>
-                    <div className="w-24">
-                      <Slider value={[volume]} min={0} max={100} step={1} onValueChange={handleVolumeChange} />
-                    </div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={`border-cyan-500 ${isEffectsEnabled ? "bg-cyan-500/20 text-cyan-300" : "text-zinc-400"}`}
-                    onClick={() => setIsEffectsEnabled(!isEffectsEnabled)}
-                    disabled={!audioBuffer}
-                  >
-                    Effects {isEffectsEnabled ? "On" : "Off"}
-                  </Button>
+            <AudioVisualizer
+              isPlaying={isPlaying}
+              audioFile={generatedAudio}
+              analyserNode={analyserNode}
+              currentTime={currentTime}
+              duration={duration}
+            />
+
+            <div className="mt-6 flex justify-center items-center gap-4">
+              <Button
+                onClick={togglePlay}
+                disabled={!audioBuffer}
+                className="bg-cyan-600 hover:bg-cyan-700 rounded-full h-12 w-12 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 ml-1" />}
+              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-zinc-400 hover:text-white"
+                  onClick={handleMuteToggle}
+                >
+                  {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+                </Button>
+                <div className="w-24">
+                  <Slider value={[volume]} min={0} max={100} step={1} onValueChange={handleVolumeChange} />
                 </div>
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className={`border-cyan-500 ${isEffectsEnabled ? "bg-cyan-500/20 text-cyan-300" : "text-zinc-400"}`}
+                onClick={() => setIsEffectsEnabled(!isEffectsEnabled)}
+                disabled={!audioBuffer}
+              >
+                Effects {isEffectsEnabled ? "On" : "Off"}
+              </Button>
+            </div>
+          </div>
 
-              <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-xl font-semibold">Audio Effects</h2>
-                  <Button variant="outline" size="sm" onClick={handleToggleEffectsPanel}>
-                    {effectsVisible ? "Hide Effects" : "Show Effects"}
-                  </Button>
-                </div>
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">Audio Effects</h2>
+              <Button variant="outline" size="sm" onClick={handleToggleEffectsPanel}>
+                {effectsVisible ? "Hide Effects" : "Show Effects"}
+              </Button>
+            </div>
 
-                {effectsVisible && (
-                  <AudioEffectsPanel
-                    effects={effects}
-                    onEffectChange={handleEffectChange}
-                    disabled={!audioBuffer || !isEffectsEnabled}
-                  />
-                )}
+            {effectsVisible && (
+              <AudioEffectsPanel
+                effects={effects}
+                onEffectChange={handleEffectChange}
+                disabled={!audioBuffer || !isEffectsEnabled}
+              />
+            )}
 
-                <div className="mt-6">
-                  <h3 className="text-lg font-medium mb-3">EDM Presets</h3>
-                  <EdmPresets onPresetSelect={handlePresetSelect} disabled={!audioBuffer} />
-                </div>
+            <div className="mt-6">
+              <h3 className="text-lg font-medium mb-3">EDM Presets</h3>
+              <EdmPresets onPresetSelect={handlePresetSelect} disabled={!audioBuffer} />
+            </div>
 
-                <div className="mt-6">
-                  <h3 className="text-lg font-medium mb-3">Generation Settings</h3>
+            <div className="mt-6">
+              <h3 className="text-lg font-medium mb-3">Generation Settings</h3>
 
-                  <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                    <TabsList className="grid grid-cols-2 mb-4">
-                      <TabsTrigger value="voice">Voice & Style</TabsTrigger>
-                      <TabsTrigger value="music">Music Settings</TabsTrigger>
-                    </TabsList>
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="grid grid-cols-2 mb-4">
+                  <TabsTrigger value="voice">Voice & Style</TabsTrigger>
+                  <TabsTrigger value="music">Music Settings</TabsTrigger>
+                </TabsList>
 
-                    <TabsContent value="voice" className="space-y-4">
-                      <div>
-                        <label className="mb-2 block text-sm text-zinc-400">Voice</label>
-                        <Select value={currentVoice} onValueChange={setCurrentVoice}>
-                          <SelectTrigger className="border-zinc-700 bg-zinc-900">
-                            <SelectValue placeholder="Select Voice" />
-                          </SelectTrigger>
-                          <SelectContent className="border-zinc-700 bg-zinc-900">
-                            <SelectItem value="alloy">Alloy (Balanced)</SelectItem>
-                            <SelectItem value="echo">Echo (Baritone)</SelectItem>
-                            <SelectItem value="fable">Fable (Warm)</SelectItem>
-                            <SelectItem value="onyx">Onyx (Deep)</SelectItem>
-                            <SelectItem value="nova">Nova (Feminine)</SelectItem>
-                            <SelectItem value="shimmer">Shimmer (Bright)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <p className="mt-1 text-xs text-zinc-500">{voiceDescriptions[currentVoice]}</p>
-                      </div>
-
-                      <div>
-                        <label className="mb-2 block text-sm text-zinc-400">Voice Style</label>
-                        <Select value={currentStyle} onValueChange={setCurrentStyle}>
-                          <SelectTrigger className="border-zinc-700 bg-zinc-900">
-                            <SelectValue placeholder="Select Style" />
-                          </SelectTrigger>
-                          <SelectContent className="border-zinc-700 bg-zinc-900">
-                            <SelectItem value="neutral">Neutral</SelectItem>
-                            <SelectItem value="cheerful">Cheerful</SelectItem>
-                            <SelectItem value="sad">Sad</SelectItem>
-                            <SelectItem value="professional">Professional</SelectItem>
-                            <SelectItem value="excited">Excited</SelectItem>
-                            <SelectItem value="calm">Calm</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <p className="mt-1 text-xs text-zinc-500">{styleDescriptions[currentStyle]}</p>
-                      </div>
-
-                      <div>
-                        <label className="mb-2 block text-sm text-zinc-400">Model Quality</label>
-                        <Select value={currentModel} onValueChange={setCurrentModel}>
-                          <SelectTrigger className="border-zinc-700 bg-zinc-900">
-                            <SelectValue placeholder="Select Model" />
-                          </SelectTrigger>
-                          <SelectContent className="border-zinc-700 bg-zinc-900">
-                            <SelectItem value="tts-1">Standard Quality</SelectItem>
-                            <SelectItem value="tts-1-hd">HD Quality</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <p className="mt-1 text-xs text-zinc-500">
-                          {currentModel === "tts-1-hd"
-                            ? "Higher quality audio with improved clarity and naturalness"
-                            : "Standard quality, suitable for most use cases"}
-                        </p>
-                      </div>
-                    </TabsContent>
-
-                    <TabsContent value="music" className="space-y-4">
-                      <div>
-                        <label className="mb-2 block text-sm text-zinc-400">Genre</label>
-                        <Select defaultValue={genreOptions[0]}>
-                          <SelectTrigger className="border-zinc-700 bg-zinc-900">
-                            <SelectValue placeholder="Select Genre" />
-                          </SelectTrigger>
-                          <SelectContent className="border-zinc-700 bg-zinc-900">
-                            {genreOptions.map((genre) => (
-                              <SelectItem key={genre} value={genre}>
-                                {genre}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div>
-                        <label className="mb-2 block text-sm text-zinc-400">BPM</label>
-                        <div className="flex items-center gap-4">
-                          <Slider
-                            value={[currentBpm]}
-                            min={60}
-                            max={200}
-                            step={1}
-                            onValueChange={(value) => setCurrentBpm(value[0])}
-                            className="flex-1 [&>span]:bg-cyan-500"
-                          />
-                          <span className="text-sm font-medium w-12 text-right">{currentBpm}</span>
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="mb-2 block text-sm text-zinc-400">Key</label>
-                        <Select value={currentKey} onValueChange={handleKeyChange}>
-                          <SelectTrigger className="border-zinc-700 bg-zinc-900">
-                            <SelectValue placeholder="Select Key" />
-                          </SelectTrigger>
-                          <SelectContent className="border-zinc-700 bg-zinc-900">
-                            <SelectItem value="C Major">C Major</SelectItem>
-                            <SelectItem value="C Minor">C Minor</SelectItem>
-                            <SelectItem value="D Major">D Major</SelectItem>
-                            <SelectItem value="D Minor">D Minor</SelectItem>
-                            <SelectItem value="E Major">E Major</SelectItem>
-                            <SelectItem value="E Minor">E Minor</SelectItem>
-                            <SelectItem value="F Major">F Major</SelectItem>
-                            <SelectItem value="F Minor">F Minor</SelectItem>
-                            <SelectItem value="G Major">G Major</SelectItem>
-                            <SelectItem value="G Minor">G Minor</SelectItem>
-                            <SelectItem value="A Major">A Major</SelectItem>
-                            <SelectItem value="A Minor">A Minor</SelectItem>
-                            <SelectItem value="B Major">B Major</SelectItem>
-                            <SelectItem value="B Minor">B Minor</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </TabsContent>
-                  </Tabs>
-                </div>
-
-                <div className="mt-8 flex justify-between">
-                  <Button
-                    variant="outline"
-                    className="border-cyan-500 text-cyan-400 hover:bg-cyan-950/30"
-                    disabled={!audioBuffer}
-                  >
-                    Save to Library
-                  </Button>
-                  <div className="flex gap-3">
-                    <Button
-                      variant="outline"
-                      className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
-                      disabled={!audioBuffer}
-                    >
-                      <Share2 className="h-4 w-4 mr-2" />
-                      Share
-                    </Button>
-                    <Button className="bg-cyan-600 hover:bg-cyan-700" disabled={!audioBuffer}>
-                      <Download className="h-4 w-4 mr-2" />
-                      Download
-                    </Button>
+                <TabsContent value="voice" className="space-y-4">
+                  <div>
+                    <label className="mb-2 block text-sm text-zinc-400">Voice</label>
+                    <Select value={currentVoice} onValueChange={setCurrentVoice}>
+                      <SelectTrigger className="border-zinc-700 bg-zinc-900">
+                        <SelectValue placeholder="Select Voice" />
+                      </SelectTrigger>
+                      <SelectContent className="border-zinc-700 bg-zinc-900">
+                        <SelectItem value="alloy">Alloy (Balanced)</SelectItem>
+                        <SelectItem value="echo">Echo (Baritone)</SelectItem>
+                        <SelectItem value="fable">Fable (Warm)</SelectItem>
+                        <SelectItem value="onyx">Onyx (Deep)</SelectItem>
+                        <SelectItem value="nova">Nova (Feminine)</SelectItem>
+                        <SelectItem value="shimmer">Shimmer (Bright)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="mt-1 text-xs text-zinc-500">{voiceDescriptions[currentVoice]}</p>
                   </div>
-                </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm text-zinc-400">Voice Style</label>
+                    <Select value={currentStyle} onValueChange={setCurrentStyle}>
+                      <SelectTrigger className="border-zinc-700 bg-zinc-900">
+                        <SelectValue placeholder="Select Style" />
+                      </SelectTrigger>
+                      <SelectContent className="border-zinc-700 bg-zinc-900">
+                        <SelectItem value="neutral">Neutral</SelectItem>
+                        <SelectItem value="cheerful">Cheerful</SelectItem>
+                        <SelectItem value="sad">Sad</SelectItem>
+                        <SelectItem value="professional">Professional</SelectItem>
+                        <SelectItem value="excited">Excited</SelectItem>
+                        <SelectItem value="calm">Calm</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="mt-1 text-xs text-zinc-500">{styleDescriptions[currentStyle]}</p>
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm text-zinc-400">Model Quality</label>
+                    <Select value={currentModel} onValueChange={setCurrentModel}>
+                      <SelectTrigger className="border-zinc-700 bg-zinc-900">
+                        <SelectValue placeholder="Select Model" />
+                      </SelectTrigger>
+                      <SelectContent className="border-zinc-700 bg-zinc-900">
+                        <SelectItem value="tts-1">Standard Quality</SelectItem>
+                        <SelectItem value="tts-1-hd">HD Quality</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      {currentModel === "tts-1-hd"
+                        ? "Higher quality audio with improved clarity and naturalness"
+                        : "Standard quality, suitable for most use cases"}
+                    </p>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="music" className="space-y-4">
+                  <div>
+                    <label className="mb-2 block text-sm text-zinc-400">Genre</label>
+                    <Select defaultValue={genreOptions[0]}>
+                      <SelectTrigger className="border-zinc-700 bg-zinc-900">
+                        <SelectValue placeholder="Select Genre" />
+                      </SelectTrigger>
+                      <SelectContent className="border-zinc-700 bg-zinc-900">
+                        {genreOptions.map((genre) => (
+                          <SelectItem key={genre} value={genre}>
+                            {genre}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm text-zinc-400">BPM</label>
+                    <div className="flex items-center gap-4">
+                      <Slider
+                        value={[currentBpm]}
+                        min={60}
+                        max={200}
+                        step={1}
+                        onValueChange={(value) => setCurrentBpm(value[0])}
+                        className="flex-1 [&>span]:bg-cyan-500"
+                      />
+                      <span className="text-sm font-medium w-12 text-right">{currentBpm}</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm text-zinc-400">Key</label>
+                    <Select value={currentKey} onValueChange={handleKeyChange}>
+                      <SelectTrigger className="border-zinc-700 bg-zinc-900">
+                        <SelectValue placeholder="Select Key" />
+                      </SelectTrigger>
+                      <SelectContent className="border-zinc-700 bg-zinc-900">
+                        <SelectItem value="C Major">C Major</SelectItem>
+                        <SelectItem value="C Minor">C Minor</SelectItem>
+                        <SelectItem value="D Major">D Major</SelectItem>
+                        <SelectItem value="D Minor">D Minor</SelectItem>
+                        <SelectItem value="E Major">E Major</SelectItem>
+                        <SelectItem value="E Minor">E Minor</SelectItem>
+                        <SelectItem value="F Major">F Major</SelectItem>
+                        <SelectItem value="F Minor">F Minor</SelectItem>
+                        <SelectItem value="G Major">G Major</SelectItem>
+                        <SelectItem value="G Minor">G Minor</SelectItem>
+                        <SelectItem value="A Major">A Major</SelectItem>
+                        <SelectItem value="A Minor">A Minor</SelectItem>
+                        <SelectItem value="B Major">B Major</SelectItem>
+                        <SelectItem value="B Minor">B Minor</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </div>
+
+            <div className="mt-8 flex justify-between">
+              <Button
+                variant="outline"
+                className="border-cyan-500 text-cyan-400 hover:bg-cyan-950/30"
+                disabled={!audioBuffer}
+              >
+                Save to Library
+              </Button>
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                  disabled={!audioBuffer}
+                >
+                  <Share2 className="h-4 w-4 mr-2" />
+                  Share
+                </Button>
+                <Button className="bg-cyan-600 hover:bg-cyan-700" disabled={!audioBuffer}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Download
+                </Button>
               </div>
             </div>
           </div>
-        </TabsContent>
-
-        <TabsContent value="history">
-          <Card>
-            <CardHeader>
-              <CardTitle>Generation History</CardTitle>
-              <CardDescription>Your recent text-to-audio generations</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8">
-                <p className="text-zinc-400 mb-4">Your generation history will appear here</p>
-                <Button variant="outline">Clear History</Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="presets">
-          <Card>
-            <CardHeader>
-              <CardTitle>Voice Presets</CardTitle>
-              <CardDescription>Save and load your favorite voice settings</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8">
-                <p className="text-zinc-400 mb-4">You haven't saved any presets yet</p>
-                <Button variant="outline">Create New Preset</Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+        </div>
+      </div>
     </div>
   )
 }

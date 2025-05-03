@@ -1,10 +1,11 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { Play, Pause, SkipBack, SkipForward, Volume2, Download } from "lucide-react"
+import { Play, Pause, SkipBack, SkipForward, Volume2, Download, Share2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Card, CardContent } from "@/components/ui/card"
+import { toast } from "@/components/ui/use-toast"
 
 interface AudioPlayerProps {
   tracks: {
@@ -53,7 +54,7 @@ export function AudioPlayer({ tracks }: AudioPlayerProps) {
         }
       }
     }
-  }, [currentTrackIndex, tracks])
+  }, [currentTrackIndex, tracks, isPlaying])
 
   useEffect(() => {
     // Update volume when slider changes
@@ -147,13 +148,107 @@ export function AudioPlayer({ tracks }: AudioPlayerProps) {
   const downloadTrack = () => {
     if (!currentTrack) return
 
-    // Create an anchor element for download
-    const downloadLink = document.createElement("a")
-    downloadLink.href = currentTrack.audio
-    downloadLink.download = `${currentTrack.title}.mp3`
-    document.body.appendChild(downloadLink)
-    downloadLink.click()
-    document.body.removeChild(downloadLink)
+    try {
+      // Buat blob URL untuk download
+      fetch(currentTrack.audio)
+        .then((response) => response.blob())
+        .then((blob) => {
+          // Buat object URL dari blob
+          const blobUrl = URL.createObjectURL(blob)
+
+          // Buat elemen anchor untuk download
+          const downloadLink = document.createElement("a")
+          downloadLink.href = blobUrl
+          downloadLink.download = `${currentTrack.title}.mp3`
+          document.body.appendChild(downloadLink)
+          downloadLink.click()
+
+          // Cleanup
+          setTimeout(() => {
+            document.body.removeChild(downloadLink)
+            URL.revokeObjectURL(blobUrl)
+          }, 100)
+
+          toast({
+            title: "Download Started",
+            description: `${currentTrack.title} is downloading...`,
+          })
+        })
+        .catch((error) => {
+          console.error("Download failed:", error)
+          toast({
+            title: "Download Failed",
+            description: "Couldn't download the track. Please try again.",
+            variant: "destructive",
+          })
+        })
+    } catch (error) {
+      console.error("Download error:", error)
+      toast({
+        title: "Download Error",
+        description: "There was a problem downloading the track.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Implement share functionality
+  const shareTrack = async () => {
+    if (!currentTrack) return
+
+    // Check if Web Share API is supported
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `${currentTrack.title} by ${currentTrack.artist}`,
+          text: `Check out ${currentTrack.title} by ${currentTrack.artist}`,
+          url: window.location.href,
+        })
+
+        toast({
+          title: "Shared Successfully",
+          description: "Track has been shared!",
+        })
+      } catch (error) {
+        console.error("Sharing failed:", error)
+
+        // Fall back to copying to clipboard
+        copyLinkToClipboard()
+      }
+    } else {
+      // If Web Share API not supported, copy to clipboard
+      copyLinkToClipboard()
+    }
+  }
+
+  // Helper function to copy link to clipboard
+  const copyLinkToClipboard = () => {
+    try {
+      const shareUrl = `${window.location.origin}/share/track/${currentTrack.id}`
+      navigator.clipboard.writeText(shareUrl).then(
+        () => {
+          toast({
+            title: "Link Copied",
+            description: "Track link copied to clipboard!",
+          })
+        },
+        (err) => {
+          console.error("Could not copy text: ", err)
+          toast({
+            title: "Copy Failed",
+            description: "Could not copy link to clipboard.",
+            variant: "destructive",
+          })
+        },
+      )
+    } catch (error) {
+      console.error("Clipboard API not available:", error)
+      toast({
+        title: "Share Failed",
+        description: "Sharing is not supported in your browser.",
+        variant: "destructive",
+      })
+    }
   }
 
   // Fallback image handling
@@ -180,14 +275,25 @@ export function AudioPlayer({ tracks }: AudioPlayerProps) {
                 <p className="text-gray-300 text-sm">{currentTrack.artist}</p>
               </div>
 
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-white hover:text-cyan-400 hover:bg-gray-800"
-                onClick={downloadTrack}
-              >
-                <Download className="h-5 w-5" />
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-white hover:text-cyan-400 hover:bg-gray-800"
+                  onClick={downloadTrack}
+                >
+                  <Download className="h-5 w-5" />
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-white hover:text-cyan-400 hover:bg-gray-800"
+                  onClick={shareTrack}
+                >
+                  <Share2 className="h-5 w-5" />
+                </Button>
+              </div>
             </div>
 
             <div className="space-y-2 w-full">
