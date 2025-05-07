@@ -1,97 +1,144 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useCallback, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Slider } from "@/components/ui/slider"
+import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Slider } from "@/components/ui/slider"
 import { Download, Share2, Play, Pause, Volume2, VolumeX } from "lucide-react"
-import { TextToAudioGenerator } from "@/components/text-to-audio-generator"
-import { AudioVisualizer } from "@/components/audio-visualizer"
-import { AudioEffectsPanel } from "@/components/audio-effects-panel"
 import { toast } from "@/components/ui/use-toast"
 import { Toaster } from "@/components/ui/toaster"
-import { EdmPresets } from "@/components/edm-presets"
-import { generateAudio } from "@/app/actions/audio-actions"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Card, CardContent } from "@/components/ui/card"
 
 export default function TextToAudioPage() {
-  const [prompt, setPrompt] = useState("")
+  // State untuk text-to-audio
+  const [text, setText] = useState("")
+  const [voice, setVoice] = useState("male")
+  const [effect, setEffect] = useState("clean")
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [generatedAudio, setGeneratedAudio] = useState<string | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [volume, setVolume] = useState(80)
   const [isMuted, setIsMuted] = useState(false)
-  const [isProcessing, setIsProcessing] = useState(false)
-  const [audioContext, setAudioContext] = useState(null)
-  const [audioSource, setAudioSource] = useState(null)
-  const [gainNode, setGainNode] = useState(null)
-  const [analyserNode, setAnalyserNode] = useState(null)
-  const [audioBuffer, setAudioBuffer] = useState(null)
-  const [currentTime, setCurrentTime] = useState(0)
-  const [duration, setDuration] = useState(0)
-  const [generatedAudio, setGeneratedAudio] = useState(null)
+  const [audioContext, setAudioContext] = useState<AudioContext | null>(null)
+  const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null)
+  const [gainNode, setGainNode] = useState<GainNode | null>(null)
+  const [audioSource, setAudioSource] = useState<MediaElementAudioSourceNode | null>(null)
+  const [activePreset, setActivePreset] = useState<string | null>(null)
+  const [currentBpm, setCurrentBpm] = useState(128)
   const [effects, setEffects] = useState({
-    reverb: 30,
-    delay: 15,
-    distortion: 0,
-    phaser: 0,
+    bassBoost: 70,
+    reverb: 40,
+    delay: 20,
     filter: 50,
     wobble: 0,
-    flanger: 0,
-    bitcrush: 0,
-    low: 50,
-    mid: 50,
-    high: 50,
-    presence: 40,
+    distortion: 0,
+    pitch: 50,
+    speed: 50,
   })
-  const [isEffectsEnabled, setIsEffectsEnabled] = useState(true)
-  const [effectsVisible, setEffectsVisible] = useState(true)
-  const [currentBpm, setCurrentBpm] = useState(120)
-  const [currentKey, setCurrentKey] = useState("C Minor")
-  const [activePreset, setActivePreset] = useState(null)
-  const [currentVoice, setCurrentVoice] = useState("alloy")
-  const [currentModel, setCurrentModel] = useState("tts-1")
-  const [currentStyle, setCurrentStyle] = useState("neutral")
-  const [activeTab, setActiveTab] = useState("voice")
 
-  const animationRef = useRef(null)
-  const convolutionBuffer = useRef(null)
-  const oscillatorRef = useRef(null)
-  const lfoRef = useRef(null)
-  const flangerOscRef = useRef(null)
-  const phaserOscRef = useRef(null)
+  // Referensi untuk elemen audio dan canvas
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const animationRef = useRef<number | null>(null)
 
-  // Initialize Web Audio API
+  // Daftar suara
+  const voices = [
+    { id: "male", name: "Male Voice" },
+    { id: "female", name: "Female Voice" },
+    { id: "robot", name: "Robot Voice" },
+    { id: "deep", name: "Deep Voice" },
+  ]
+
+  // Preset efek
+  const presets = [
+    {
+      id: "clean",
+      name: "Clean",
+      effects: {
+        bassBoost: 50,
+        reverb: 20,
+        delay: 10,
+        filter: 80,
+        wobble: 0,
+        distortion: 0,
+        pitch: 50,
+        speed: 50,
+      },
+      bpm: 128,
+    },
+    {
+      id: "dubstep",
+      name: "Dubstep",
+      effects: {
+        bassBoost: 80,
+        reverb: 20,
+        delay: 15,
+        filter: 30,
+        wobble: 80,
+        distortion: 60,
+        pitch: 45,
+        speed: 50,
+      },
+      bpm: 140,
+    },
+    {
+      id: "trance",
+      name: "Trance",
+      effects: {
+        bassBoost: 65,
+        reverb: 70,
+        delay: 50,
+        filter: 60,
+        wobble: 0,
+        distortion: 0,
+        pitch: 55,
+        speed: 55,
+      },
+      bpm: 138,
+    },
+    {
+      id: "house",
+      name: "House",
+      effects: {
+        bassBoost: 70,
+        reverb: 40,
+        delay: 20,
+        filter: 70,
+        wobble: 0,
+        distortion: 0,
+        pitch: 50,
+        speed: 50,
+      },
+      bpm: 124,
+    },
+  ]
+
+  // Contoh prompt
+  const examplePrompts = [
+    "Welcome to the ultimate EDM experience",
+    "Drop the bass right now",
+    "Feel the rhythm, feel the vibe",
+    "Let the music take control",
+    "This is Composition Converter in the house",
+  ]
+
+  // Inisialisasi Web Audio API
   useEffect(() => {
     if (typeof window !== "undefined") {
       try {
-        // Fix the AudioContext definition
-        const AudioContext = window.AudioContext || window.webkitAudioContext
-        const context = new AudioContext({ latencyHint: "playback", sampleRate: 48000 })
-
-        // Create master gain node
-        const gain = context.createGain()
-        gain.gain.value = volume / 100
-
-        // Create analyzer for visualization
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext
+        const context = new AudioContext()
         const analyser = context.createAnalyser()
-        analyser.fftSize = 2048
-        analyser.smoothingTimeConstant = 0.8
+        analyser.fftSize = 256
+        const gain = context.createGain()
 
-        // Create limiter to prevent clipping
-        const limiter = context.createDynamicsCompressor()
-        limiter.threshold.value = -0.5
-        limiter.knee.value = 0
-        limiter.ratio.value = 20.0
-        limiter.attack.value = 0.001
-        limiter.release.value = 0.1
-
-        // Connect limiter to output
-        limiter.connect(gain)
         gain.connect(context.destination)
-        analyser.connect(limiter)
+        analyser.connect(gain)
 
         setAudioContext(context)
-        setGainNode(gain)
         setAnalyserNode(analyser)
+        setGainNode(gain)
 
         return () => {
           if (context.state !== "closed") {
@@ -100,531 +147,623 @@ export default function TextToAudioPage() {
         }
       } catch (error) {
         console.error("Error initializing Web Audio API:", error)
-        toast({
-          title: "Audio Error",
-          description: "Failed to initialize audio system. Please try again.",
-          variant: "destructive",
-        })
       }
     }
   }, [])
 
-  // Handle volume changes
+  // Connect audio element to Web Audio API when generated
+  useEffect(() => {
+    if (audioRef.current && audioContext && analyserNode && gainNode && generatedAudio) {
+      // Disconnect previous source if exists
+      if (audioSource) {
+        audioSource.disconnect()
+      }
+
+      // Create new source from audio element
+      const source = audioContext.createMediaElementSource(audioRef.current)
+
+      // Apply effects
+      applyAudioEffects(source)
+
+      setAudioSource(source)
+    }
+
+    return () => {
+      if (audioSource) {
+        audioSource.disconnect()
+      }
+    }
+  }, [generatedAudio, audioContext, analyserNode, gainNode])
+
+  // Visualisasi audio
+  useEffect(() => {
+    if (!analyserNode || !canvasRef.current || !isPlaying) return
+
+    const canvas = canvasRef.current
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return
+
+    const bufferLength = analyserNode.frequencyBinCount
+    const dataArray = new Uint8Array(bufferLength)
+
+    const draw = () => {
+      if (!ctx || !analyserNode) return
+
+      analyserNode.getByteFrequencyData(dataArray)
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+      const barWidth = (canvas.width / bufferLength) * 2.5
+      let x = 0
+
+      for (let i = 0; i < bufferLength; i++) {
+        const barHeight = (dataArray[i] / 255) * canvas.height
+
+        // Gradient based on frequency
+        const hue = (i / bufferLength) * 180 + 180 // Cyan to blue range
+        ctx.fillStyle = `hsla(${hue}, 100%, 50%, 0.8)`
+
+        ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight)
+        x += barWidth + 1
+      }
+
+      animationRef.current = requestAnimationFrame(draw)
+    }
+
+    draw()
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current)
+      }
+    }
+  }, [analyserNode, isPlaying])
+
+  // Apply audio effects to source
+  const applyAudioEffects = (source: MediaElementAudioSourceNode) => {
+    if (!audioContext || !analyserNode || !gainNode) return
+
+    // Create effect nodes
+    const bassBoost = audioContext.createBiquadFilter()
+    bassBoost.type = "lowshelf"
+    bassBoost.frequency.value = 100
+    bassBoost.gain.value = (effects.bassBoost - 50) * 0.5
+
+    const filter = audioContext.createBiquadFilter()
+    filter.type = "lowpass"
+    filter.frequency.value = 20000 * (effects.filter / 100)
+    filter.Q.value = 1
+
+    const delay = audioContext.createDelay(5.0)
+    delay.delayTime.value = (effects.delay / 100) * 0.5
+
+    const delayGain = audioContext.createGain()
+    delayGain.gain.value = effects.delay / 200
+
+    const distortion = audioContext.createWaveShaper()
+    if (effects.distortion > 0) {
+      const curve = createDistortionCurve(effects.distortion * 5)
+      distortion.curve = curve
+    }
+
+    // Connect nodes
+    source.connect(bassBoost)
+    bassBoost.connect(filter)
+    filter.connect(distortion)
+
+    // Main path
+    distortion.connect(analyserNode)
+
+    // Delay path
+    distortion.connect(delay)
+    delay.connect(delayGain)
+    delayGain.connect(analyserNode)
+
+    // Create wobble effect if enabled
+    if (effects.wobble > 0) {
+      const lfo = audioContext.createOscillator()
+      lfo.type = "sine"
+      lfo.frequency.value = (currentBpm / 240) * (0.5 + (effects.wobble / 100) * 2)
+
+      const lfoGain = audioContext.createGain()
+      lfoGain.gain.value = 500 + (effects.wobble / 100) * 7500
+
+      lfo.connect(lfoGain)
+      lfoGain.connect(filter.frequency)
+      lfo.start()
+    }
+  }
+
+  // Create distortion curve
+  const createDistortionCurve = (amount: number) => {
+    const samples = 44100
+    const curve = new Float32Array(samples)
+    const deg = Math.PI / 180
+
+    for (let i = 0; i < samples; ++i) {
+      const x = (i * 2) / samples - 1
+      curve[i] = ((3 + amount) * x * 20 * deg) / (Math.PI + amount * Math.abs(x))
+    }
+
+    return curve
+  }
+
+  // Mengatur volume saat berubah
   useEffect(() => {
     if (gainNode) {
-      // Use exponential ramp for smoother volume changes
-      gainNode.gain.setTargetAtTime(isMuted ? 0 : volume / 100, audioContext?.currentTime || 0, 0.01)
-    }
-  }, [volume, gainNode, isMuted, audioContext])
-
-  // Update time display during playback
-  useEffect(() => {
-    if (isPlaying) {
-      const updateTime = () => {
-        if (audioSource && audioContext) {
-          // Fix the elapsed time calculation
-          const elapsed = audioContext.currentTime - (audioSource.startTime || 0)
-          if (elapsed < duration) {
-            setCurrentTime(elapsed)
-            animationRef.current = requestAnimationFrame(updateTime)
-          } else {
-            setIsPlaying(false)
-            setCurrentTime(0)
-          }
-        }
-      }
-
-      animationRef.current = requestAnimationFrame(updateTime)
-
-      return () => {
-        if (animationRef.current) {
-          cancelAnimationFrame(animationRef.current)
-        }
-      }
-    }
-  }, [isPlaying, audioSource, audioContext, duration])
-
-  // Load generated audio when it changes
-  useEffect(() => {
-    if (generatedAudio && audioContext) {
-      fetch(generatedAudio.url)
-        .then((response) => response.arrayBuffer())
-        .then((arrayBuffer) => audioContext.decodeAudioData(arrayBuffer))
-        .then((decodedData) => {
-          setAudioBuffer(decodedData)
-          setDuration(decodedData.duration)
-        })
-        .catch((error) => {
-          console.error("Error loading audio:", error)
-          toast({
-            title: "Error",
-            description: "Failed to load audio file",
-            variant: "destructive",
-          })
-        })
-    }
-  }, [generatedAudio, audioContext])
-
-  const handleTextToAudio = async (prompt) => {
-    setIsProcessing(true)
-    setPrompt(prompt)
-
-    try {
-      const response = await generateAudio({
-        prompt,
-        voice: currentVoice,
-        model: currentModel,
-        style: currentStyle,
-      })
-
-      if (response.error) {
-        throw new Error(response.error)
-      }
-
-      setGeneratedAudio({
-        name: `Generated from: ${prompt.substring(0, 20)}...`,
-        url: response.audioUrl,
-      })
-
-      toast({
-        title: "Audio Generated",
-        description: `Created audio from prompt: "${prompt.substring(0, 30)}..."`,
-      })
-    } catch (error) {
-      console.error("Error generating audio:", error)
-      toast({
-        title: "Generation Failed",
-        description: error.message || "Failed to generate audio. Please try again.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsProcessing(false)
-    }
-  }
-
-  const togglePlay = async () => {
-    if (!audioContext || !audioBuffer) return
-
-    // Resume the audio context if it's suspended
-    if (audioContext.state === "suspended") {
-      await audioContext.resume()
+      gainNode.gain.value = isMuted ? 0 : volume / 100
     }
 
-    if (!audioSource) {
-      // Create a new audio source
-      const source = audioContext.createBufferSource()
-      source.buffer = audioBuffer
-      source.loop = false
-
-      // Connect the source to the audio chain
-      source.connect(analyserNode)
-      analyserNode.connect(gainNode)
-
-      source.start(0)
-      source.startTime = audioContext.currentTime // Store start time
-
-      source.onended = () => {
-        setIsPlaying(false)
-        setCurrentTime(0)
-        setAudioSource(null)
-      }
-
-      setAudioSource(source)
-      setIsPlaying(true)
-    } else {
-      // Stop and recreate the audio source
-      audioSource.stop()
-      const source = audioContext.createBufferSource()
-      source.buffer = audioBuffer
-      source.loop = false
-
-      // Connect the source to the audio chain
-      source.connect(analyserNode)
-      analyserNode.connect(gainNode)
-
-      source.start(0, currentTime) // Start from current time
-      source.startTime = audioContext.currentTime - currentTime // Recalculate start time
-
-      source.onended = () => {
-        setIsPlaying(false)
-        setCurrentTime(0)
-        setAudioSource(null)
-      }
-
-      setAudioSource(source)
-      setIsPlaying(true)
+    if (audioRef.current) {
+      audioRef.current.volume = isMuted ? 0 : volume / 100
     }
-  }
+  }, [volume, isMuted, gainNode])
 
-  const handleSeek = (value) => {
-    if (audioSource) {
-      audioSource.stop()
-      const source = audioContext.createBufferSource()
-      source.buffer = audioBuffer
-      source.loop = false
+  // Menangani contoh prompt
+  const useExamplePrompt = useCallback(
+    (prompt: string) => {
+      setText(prompt)
+    },
+    [setText],
+  )
 
-      // Connect the source to the audio chain
-      source.connect(analyserNode)
-      analyserNode.connect(gainNode)
-
-      source.start(0, value) // Start from seeked time
-      source.startTime = audioContext.currentTime - value // Recalculate start time
-
-      source.onended = () => {
-        setIsPlaying(false)
-        setCurrentTime(0)
-        setAudioSource(null)
-      }
-
-      setAudioSource(source)
-      setIsPlaying(true)
-      setCurrentTime(value)
-    } else {
-      setCurrentTime(value)
-    }
-  }
-
-  const handleVolumeChange = (value) => {
+  // Menangani perubahan volume
+  const handleVolumeChange = (value: number[]) => {
     setVolume(value[0])
   }
 
-  const handleMuteToggle = () => {
-    setIsMuted(!isMuted)
-  }
-
-  const handleEffectChange = (effectName, value) => {
-    setEffects((prevEffects) => ({
-      ...prevEffects,
-      [effectName]: value[0],
+  // Menangani perubahan efek
+  const handleEffectChange = (effect: keyof typeof effects, value: number[]) => {
+    setEffects((prev) => ({
+      ...prev,
+      [effect]: value[0],
     }))
   }
 
-  const handlePresetSelect = (preset) => {
-    setActivePreset(preset.name)
-    setEffects(preset.effects)
-    setCurrentBpm(preset.bpm)
-    setCurrentKey(preset.key)
-
-    toast({
-      title: `${preset.name} Preset Applied`,
-      description: "Effects have been optimized for this genre",
-    })
+  // Menangani toggle mute
+  const toggleMute = () => {
+    setIsMuted(!isMuted)
   }
 
-  const handleBpmChange = (value) => {
-    setCurrentBpm(value[0])
+  // Menangani pemutaran/pause
+  const togglePlay = () => {
+    if (!audioRef.current || !generatedAudio) return
+
+    if (isPlaying) {
+      audioRef.current.pause()
+    } else {
+      audioRef.current.play().catch((error) => {
+        console.error("Playback failed:", error)
+        toast({
+          title: "Playback Error",
+          description: "Couldn't play the audio. Please try again.",
+          variant: "destructive",
+        })
+      })
+    }
+
+    setIsPlaying(!isPlaying)
   }
 
-  const handleKeyChange = (key) => {
-    setCurrentKey(key)
+  // Menangani aplikasi preset
+  const applyPreset = (presetId: string) => {
+    const preset = presets.find((p) => p.id === presetId)
+
+    if (preset) {
+      setActivePreset(preset.name)
+      setEffects(preset.effects)
+      setCurrentBpm(preset.bpm)
+
+      toast({
+        title: "Preset Applied",
+        description: `${preset.name} effect has been applied!`,
+      })
+    }
   }
 
-  const handleToggleEffectsPanel = () => {
-    setEffectsVisible(!effectsVisible)
+  // Menangani generasi audio
+  const generateAudio = () => {
+    if (!text.trim()) {
+      toast({
+        title: "Text Required",
+        description: "Please enter some text to convert to audio.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsGenerating(true)
+
+    // Simulasi proses generasi
+    setTimeout(() => {
+      // Pilih sample audio berdasarkan voice dan effect
+      let audioSample
+
+      switch (voice) {
+        case "female":
+          audioSample = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3"
+          break
+        case "robot":
+          audioSample = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3"
+          break
+        case "deep":
+          audioSample = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3"
+          break
+        default:
+          audioSample = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
+      }
+
+      setGeneratedAudio(audioSample)
+      setIsGenerating(false)
+
+      toast({
+        title: "Audio Generated",
+        description: "Your text has been converted to audio!",
+      })
+
+      // Auto-play setelah generate
+      setTimeout(() => {
+        if (audioRef.current) {
+          audioRef.current
+            .play()
+            .then(() => setIsPlaying(true))
+            .catch((error) => console.error("Playback failed:", error))
+        }
+      }, 500)
+    }, 2000)
   }
 
-  const formatTime = (time) => {
-    const minutes = Math.floor(time / 60)
-    const seconds = Math.floor(time % 60)
-    return `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`
+  // Menangani download
+  const handleDownload = () => {
+    if (!generatedAudio) return
+
+    // Buat elemen anchor untuk download
+    const a = document.createElement("a")
+    a.href = generatedAudio
+    a.download = `Composition-Converter-${voice}-${effect}.mp3`
+    document.body.appendChild(a)
+    a.click()
+
+    // Cleanup
+    setTimeout(() => {
+      document.body.removeChild(a)
+
+      toast({
+        title: "Download Started",
+        description: "Your audio is downloading...",
+      })
+    }, 100)
   }
 
-  const genreOptions = ["Classic", "Sad", "Rock", "Hiphop", "Electronic", "Ambient", "Jazz"]
+  // Menangani share
+  const handleShare = () => {
+    if (!generatedAudio) return
 
-  // Voice descriptions for the UI
-  const voiceDescriptions = {
-    alloy: "A versatile, balanced voice with a neutral tone",
-    echo: "A deep, resonant male voice with a baritone quality",
-    fable: "A warm, gentle voice with a soothing quality",
-    onyx: "A deep, authoritative male voice with gravitas",
-    nova: "A feminine voice with clarity and warmth",
-    shimmer: "A bright, energetic feminine voice",
+    // Coba gunakan Web Share API jika tersedia
+    if (navigator.share) {
+      navigator
+        .share({
+          title: "Composition Converter Audio",
+          text: `Check out this awesome EDM voice: "${text.substring(0, 30)}..."`,
+          url: window.location.href,
+        })
+        .then(() => {
+          toast({
+            title: "Shared Successfully",
+            description: "Audio has been shared!",
+          })
+        })
+        .catch((error) => {
+          console.error("Sharing failed:", error)
+          copyToClipboard()
+        })
+    } else {
+      copyToClipboard()
+    }
   }
 
-  // Style descriptions for the UI
-  const styleDescriptions = {
-    neutral: "Standard conversational tone",
-    cheerful: "Upbeat and positive delivery",
-    sad: "Melancholic and somber tone",
-    professional: "Clear, formal business presentation style",
-    excited: "Enthusiastic and energetic delivery",
-    calm: "Relaxed, soothing and peaceful tone",
+  // Helper untuk copy ke clipboard
+  const copyToClipboard = () => {
+    const shareText = `Check out this awesome EDM voice on Composition Converter: "${text.substring(0, 30)}..." - ${window.location.href}`
+
+    navigator.clipboard
+      .writeText(shareText)
+      .then(() => {
+        toast({
+          title: "Link Copied",
+          description: "Audio link copied to clipboard!",
+        })
+      })
+      .catch(() => {
+        toast({
+          title: "Copy Failed",
+          description: "Could not copy link to clipboard.",
+          variant: "destructive",
+        })
+      })
   }
+
+  const handleExamplePromptClick = useCallback(
+    (prompt: string) => {
+      setText(prompt)
+    },
+    [setText],
+  )
 
   return (
     <div className="container py-8">
       <Toaster />
-      <h1 className="mb-2 text-3xl font-bold">Describe Your Remix & Let Composition converter Create!</h1>
-      <p className="mb-8 text-zinc-400">Enter a prompt, set the BPM, and select a genre to generate your remix.</p>
+      <h1 className="text-3xl font-bold mb-2">Describe Your Remix & Let Composition Converter Create!</h1>
+      <p className="text-zinc-400 mb-8">Enter a prompt, set the BPM, and select a genre to generate your remix.</p>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left panel - Text input */}
         <div className="lg:col-span-1 bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-          <h2 className="text-xl font-semibold mb-4">Text to Audio</h2>
-          <TextToAudioGenerator onGenerate={handleTextToAudio} isProcessing={isProcessing} />
+          <h2 className="text-xl font-semibold mb-4">Enter Your Text</h2>
 
-          {generatedAudio && (
-            <div className="mt-6">
-              <h3 className="text-lg font-medium mb-2">Generated Track</h3>
-              <div className="bg-zinc-800/50 rounded-lg p-4">
-                <p className="text-zinc-300 truncate">{generatedAudio.name}</p>
-                <div className="mt-3 flex justify-between items-center">
-                  <span className="text-sm text-zinc-500">{formatTime(duration || 0)}</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-cyan-400 hover:text-cyan-300"
-                    onClick={() => {
-                      setIsProcessing(true)
-                      setTimeout(() => {
-                        handleTextToAudio(prompt)
-                      }, 500)
-                    }}
-                  >
-                    Regenerate
-                  </Button>
-                </div>
+          <Textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="Type your text here to convert to EDM vocals..."
+            className="min-h-[200px] bg-zinc-800/50 border-zinc-700 mb-4"
+          />
+
+          <div className="grid grid-cols-1 gap-4 mb-6">
+            <div>
+              <label className="block text-sm text-zinc-400 mb-2">Voice Type</label>
+              <Select value={voice} onValueChange={setVoice}>
+                <SelectTrigger className="border-zinc-700 bg-zinc-900">
+                  <SelectValue placeholder="Select voice" />
+                </SelectTrigger>
+                <SelectContent className="border-zinc-700 bg-zinc-900">
+                  {voices.map((v) => (
+                    <SelectItem key={v.id} value={v.id}>
+                      {v.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="block text-sm text-zinc-400 mb-2">BPM</label>
+              <div className="flex items-center gap-4">
+                <Slider
+                  value={[currentBpm]}
+                  min={80}
+                  max={180}
+                  step={1}
+                  className="flex-1 [&>span]:bg-cyan-500"
+                  onValueChange={(value) => setCurrentBpm(value[0])}
+                />
+                <span className="text-sm font-medium w-12 text-right">{currentBpm}</span>
               </div>
             </div>
-          )}
+          </div>
+
+          <Button
+            className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700"
+            onClick={generateAudio}
+            disabled={isGenerating || !text.trim()}
+          >
+            {isGenerating ? (
+              <>
+                <svg
+                  className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
+                </svg>
+                Generating Audio...
+              </>
+            ) : (
+              "Generate Audio"
+            )}
+          </Button>
 
           <div className="mt-6">
-            <h3 className="text-lg font-medium mb-3">Suggested Prompts</h3>
+            <h3 className="text-lg font-medium mb-3">Example Prompts</h3>
             <div className="space-y-2">
-              {[
-                "Upbeat electronic dance track with synth leads",
-                "Lo-fi hip hop beat with piano samples",
-                "Ambient soundscape with nature sounds",
-                "Cinematic orchestral theme with dramatic drums",
-                "Jazz piano solo with smooth bass",
-                "Acoustic guitar folk melody",
-              ].map((promptText, index) => (
+              {examplePrompts.map((prompt, index) => (
                 <Button
                   key={index}
                   variant="outline"
                   size="sm"
                   className="w-full justify-start text-left border-zinc-700 text-zinc-300 hover:bg-zinc-800"
-                  onClick={() => handleTextToAudio(promptText)}
+                  onClick={() => handleExamplePromptClick(prompt)}
                 >
-                  {promptText}
+                  {prompt}
                 </Button>
               ))}
             </div>
           </div>
         </div>
 
+        {/* Right panel - Audio preview */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
             <h2 className="text-xl font-semibold mb-4">Audio Preview</h2>
 
-            <AudioVisualizer
-              isPlaying={isPlaying}
-              audioFile={generatedAudio}
-              analyserNode={analyserNode}
-              currentTime={currentTime}
-              duration={duration}
-            />
+            {generatedAudio ? (
+              <div className="bg-gradient-to-r from-zinc-900 to-zinc-800 rounded-lg p-4 mb-4">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="font-bold text-lg">Generated Audio</h3>
+                    <p className="text-zinc-400 text-sm">{text.length > 30 ? `${text.substring(0, 30)}...` : text}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="icon" onClick={handleDownload}>
+                      <Download className="h-4 w-4" />
+                    </Button>
+                    <Button variant="outline" size="icon" onClick={handleShare}>
+                      <Share2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
 
-            <div className="mt-6 flex justify-center items-center gap-4">
-              <Button
-                onClick={togglePlay}
-                disabled={!audioBuffer}
-                className="bg-cyan-600 hover:bg-cyan-700 rounded-full h-12 w-12 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 ml-1" />}
-              </Button>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-zinc-400 hover:text-white"
-                  onClick={handleMuteToggle}
-                >
-                  {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
-                </Button>
-                <div className="w-24">
-                  <Slider value={[volume]} min={0} max={100} step={1} onValueChange={handleVolumeChange} />
+                {/* Visualizer */}
+                <div className="h-24 bg-zinc-800 rounded-lg mb-4 overflow-hidden">
+                  <canvas ref={canvasRef} width={600} height={100} className="w-full h-full"></canvas>
+                </div>
+
+                {/* Audio controls */}
+                <div className="flex items-center justify-between">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="rounded-full h-12 w-12 bg-cyan-600 hover:bg-cyan-700 border-none"
+                    onClick={togglePlay}
+                  >
+                    {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 ml-0.5" />}
+                  </Button>
+
+                  <div className="flex items-center gap-2 flex-1 mx-4">
+                    <Button variant="ghost" size="icon" onClick={toggleMute}>
+                      {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                    </Button>
+                    <Slider
+                      value={[volume]}
+                      min={0}
+                      max={100}
+                      step={1}
+                      onValueChange={handleVolumeChange}
+                      className="flex-1 [&>span]:bg-cyan-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Hidden audio element */}
+                <audio
+                  ref={audioRef}
+                  src={generatedAudio}
+                  onEnded={() => setIsPlaying(false)}
+                  onError={() => {
+                    toast({
+                      title: "Audio Error",
+                      description: "Failed to load audio. Please try generating again.",
+                      variant: "destructive",
+                    })
+                    setIsPlaying(false)
+                  }}
+                />
+              </div>
+            ) : (
+              <Card className="border-dashed border-2 border-zinc-700">
+                <CardContent className="p-6 text-center">
+                  <div className="mb-4">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-12 w-12 mx-auto text-zinc-500"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                      />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-medium mb-2">No Audio Generated Yet</h3>
+                  <p className="text-zinc-400 mb-4">Enter your text and click "Generate Audio" to create EDM vocals</p>
+                </CardContent>
+              </Card>
+            )}
+
+            <div className="mt-6">
+              <h3 className="text-lg font-medium mb-3">Audio Settings</h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm text-zinc-400 mb-2">Pitch</label>
+                  <Slider
+                    value={[effects.pitch]}
+                    min={0}
+                    max={100}
+                    step={1}
+                    className="[&>span]:bg-cyan-500"
+                    onValueChange={(value) => handleEffectChange("pitch", value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-zinc-400 mb-2">Speed</label>
+                  <Slider
+                    value={[effects.speed]}
+                    min={0}
+                    max={100}
+                    step={1}
+                    className="[&>span]:bg-cyan-500"
+                    onValueChange={(value) => handleEffectChange("speed", value)}
+                  />
                 </div>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className={`border-cyan-500 ${isEffectsEnabled ? "bg-cyan-500/20 text-cyan-300" : "text-zinc-400"}`}
-                onClick={() => setIsEffectsEnabled(!isEffectsEnabled)}
-                disabled={!audioBuffer}
-              >
-                Effects {isEffectsEnabled ? "On" : "Off"}
-              </Button>
             </div>
           </div>
 
           <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">Audio Effects</h2>
-              <Button variant="outline" size="sm" onClick={handleToggleEffectsPanel}>
-                {effectsVisible ? "Hide Effects" : "Show Effects"}
-              </Button>
-            </div>
+            <h2 className="text-xl font-semibold mb-4">EDM Effects</h2>
 
-            {effectsVisible && (
-              <AudioEffectsPanel
-                effects={effects}
-                onEffectChange={handleEffectChange}
-                disabled={!audioBuffer || !isEffectsEnabled}
-              />
-            )}
-
-            <div className="mt-6">
-              <h3 className="text-lg font-medium mb-3">EDM Presets</h3>
-              <EdmPresets onPresetSelect={handlePresetSelect} disabled={!audioBuffer} />
-            </div>
-
-            <div className="mt-6">
-              <h3 className="text-lg font-medium mb-3">Generation Settings</h3>
-
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid grid-cols-2 mb-4">
-                  <TabsTrigger value="voice">Voice & Style</TabsTrigger>
-                  <TabsTrigger value="music">Music Settings</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="voice" className="space-y-4">
-                  <div>
-                    <label className="mb-2 block text-sm text-zinc-400">Voice</label>
-                    <Select value={currentVoice} onValueChange={setCurrentVoice}>
-                      <SelectTrigger className="border-zinc-700 bg-zinc-900">
-                        <SelectValue placeholder="Select Voice" />
-                      </SelectTrigger>
-                      <SelectContent className="border-zinc-700 bg-zinc-900">
-                        <SelectItem value="alloy">Alloy (Balanced)</SelectItem>
-                        <SelectItem value="echo">Echo (Baritone)</SelectItem>
-                        <SelectItem value="fable">Fable (Warm)</SelectItem>
-                        <SelectItem value="onyx">Onyx (Deep)</SelectItem>
-                        <SelectItem value="nova">Nova (Feminine)</SelectItem>
-                        <SelectItem value="shimmer">Shimmer (Bright)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="mt-1 text-xs text-zinc-500">{voiceDescriptions[currentVoice]}</p>
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm text-zinc-400">Voice Style</label>
-                    <Select value={currentStyle} onValueChange={setCurrentStyle}>
-                      <SelectTrigger className="border-zinc-700 bg-zinc-900">
-                        <SelectValue placeholder="Select Style" />
-                      </SelectTrigger>
-                      <SelectContent className="border-zinc-700 bg-zinc-900">
-                        <SelectItem value="neutral">Neutral</SelectItem>
-                        <SelectItem value="cheerful">Cheerful</SelectItem>
-                        <SelectItem value="sad">Sad</SelectItem>
-                        <SelectItem value="professional">Professional</SelectItem>
-                        <SelectItem value="excited">Excited</SelectItem>
-                        <SelectItem value="calm">Calm</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="mt-1 text-xs text-zinc-500">{styleDescriptions[currentStyle]}</p>
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm text-zinc-400">Model Quality</label>
-                    <Select value={currentModel} onValueChange={setCurrentModel}>
-                      <SelectTrigger className="border-zinc-700 bg-zinc-900">
-                        <SelectValue placeholder="Select Model" />
-                      </SelectTrigger>
-                      <SelectContent className="border-zinc-700 bg-zinc-900">
-                        <SelectItem value="tts-1">Standard Quality</SelectItem>
-                        <SelectItem value="tts-1-hd">HD Quality</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="mt-1 text-xs text-zinc-500">
-                      {currentModel === "tts-1-hd"
-                        ? "Higher quality audio with improved clarity and naturalness"
-                        : "Standard quality, suitable for most use cases"}
-                    </p>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="music" className="space-y-4">
-                  <div>
-                    <label className="mb-2 block text-sm text-zinc-400">Genre</label>
-                    <Select defaultValue={genreOptions[0]}>
-                      <SelectTrigger className="border-zinc-700 bg-zinc-900">
-                        <SelectValue placeholder="Select Genre" />
-                      </SelectTrigger>
-                      <SelectContent className="border-zinc-700 bg-zinc-900">
-                        {genreOptions.map((genre) => (
-                          <SelectItem key={genre} value={genre}>
-                            {genre}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm text-zinc-400">BPM</label>
-                    <div className="flex items-center gap-4">
-                      <Slider
-                        value={[currentBpm]}
-                        min={60}
-                        max={200}
-                        step={1}
-                        onValueChange={(value) => setCurrentBpm(value[0])}
-                        className="flex-1 [&>span]:bg-cyan-500"
-                      />
-                      <span className="text-sm font-medium w-12 text-right">{currentBpm}</span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm text-zinc-400">Key</label>
-                    <Select value={currentKey} onValueChange={handleKeyChange}>
-                      <SelectTrigger className="border-zinc-700 bg-zinc-900">
-                        <SelectValue placeholder="Select Key" />
-                      </SelectTrigger>
-                      <SelectContent className="border-zinc-700 bg-zinc-900">
-                        <SelectItem value="C Major">C Major</SelectItem>
-                        <SelectItem value="C Minor">C Minor</SelectItem>
-                        <SelectItem value="D Major">D Major</SelectItem>
-                        <SelectItem value="D Minor">D Minor</SelectItem>
-                        <SelectItem value="E Major">E Major</SelectItem>
-                        <SelectItem value="E Minor">E Minor</SelectItem>
-                        <SelectItem value="F Major">F Major</SelectItem>
-                        <SelectItem value="F Minor">F Minor</SelectItem>
-                        <SelectItem value="G Major">G Major</SelectItem>
-                        <SelectItem value="G Minor">G Minor</SelectItem>
-                        <SelectItem value="A Major">A Major</SelectItem>
-                        <SelectItem value="A Minor">A Minor</SelectItem>
-                        <SelectItem value="B Major">B Major</SelectItem>
-                        <SelectItem value="B Minor">B Minor</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </div>
-
-            <div className="mt-8 flex justify-between">
-              <Button
-                variant="outline"
-                className="border-cyan-500 text-cyan-400 hover:bg-cyan-950/30"
-                disabled={!audioBuffer}
-              >
-                Save to Library
-              </Button>
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
-                  disabled={!audioBuffer}
-                >
-                  <Share2 className="h-4 w-4 mr-2" />
-                  Share
-                </Button>
-                <Button className="bg-cyan-600 hover:bg-cyan-700" disabled={!audioBuffer}>
-                  <Download className="h-4 w-4 mr-2" />
-                  Download
-                </Button>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+              <div>
+                <label className="block text-sm text-zinc-400 mb-2">Bass Boost</label>
+                <Slider
+                  value={[effects.bassBoost]}
+                  min={0}
+                  max={100}
+                  step={1}
+                  className="[&>span]:bg-cyan-500"
+                  onValueChange={(value) => handleEffectChange("bassBoost", value)}
+                />
               </div>
+
+              <div>
+                <label className="block text-sm text-zinc-400 mb-2">Reverb</label>
+                <Slider
+                  value={[effects.reverb]}
+                  min={0}
+                  max={100}
+                  step={1}
+                  className="[&>span]:bg-cyan-500"
+                  onValueChange={(value) => handleEffectChange("reverb", value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-zinc-400 mb-2">Delay</label>
+                <Slider
+                  value={[effects.delay]}
+                  min={0}
+                  max={100}
+                  step={1}
+                  className="[&>span]:bg-cyan-500"
+                  onValueChange={(value) => handleEffectChange("delay", value)}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {presets.map((preset) => (
+                <Button
+                  key={preset.id}
+                  variant="outline"
+                  className={`border-zinc-700 hover:border-cyan-500 hover:bg-cyan-500/10 ${
+                    activePreset === preset.name ? "border-cyan-500 bg-cyan-500/10" : ""
+                  }`}
+                  onClick={() => applyPreset(preset.id)}
+                >
+                  {preset.name}
+                </Button>
+              ))}
             </div>
           </div>
         </div>

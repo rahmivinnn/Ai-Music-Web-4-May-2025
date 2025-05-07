@@ -1,13 +1,25 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Download, Share2, Trash2, Search } from "lucide-react"
+import { Download, Share2, Trash2, Search, Play, Pause } from "lucide-react"
+import { useToast } from "@/components/ui/use-toast"
 
 export default function RemixHistoryPage() {
   const [filter, setFilter] = useState("all")
+  const [currentlyPlaying, setCurrentlyPlaying] = useState<number | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const { toast } = useToast()
+
+  // Sample audio URLs - in a real app, these would come from your database
+  const audioSamples = {
+    1: "/samples/sample-neutral.mp3",
+    2: "/samples/sample-male.mp3",
+    3: "/samples/sample-female.mp3",
+    4: "/samples/sample-warm.mp3",
+  }
 
   const remixes = [
     {
@@ -16,8 +28,7 @@ export default function RemixHistoryPage() {
       original: "Dreams by Sarah Chen",
       date: "2024-03-14",
       duration: "02:20",
-      image:
-        "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/placeholder-ob7miW3mUreePYfXdVwkpFWHthzoR5.svg?height=60&width=60&query=colorful+abstract+face+with+headphones",
+      image: "/placeholder.svg?key=3w8bn",
     },
     {
       id: 2,
@@ -25,8 +36,7 @@ export default function RemixHistoryPage() {
       original: "Dreams by Sarah Chen",
       date: "2024-03-14",
       duration: "02:20",
-      image:
-        "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/placeholder-ob7miW3mUreePYfXdVwkpFWHthzoR5.svg?height=60&width=60&query=abstract+colorful+music+art",
+      image: "/placeholder.svg?key=9icam",
     },
     {
       id: 3,
@@ -34,8 +44,7 @@ export default function RemixHistoryPage() {
       original: "Dreams by Sarah Chen",
       date: "2024-03-14",
       duration: "02:20",
-      image:
-        "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/placeholder-ob7miW3mUreePYfXdVwkpFWHthzoR5.svg?height=60&width=60&query=colorful+abstract+face+with+headphones",
+      image: "/placeholder.svg?key=5nfa4",
     },
     {
       id: 4,
@@ -43,10 +52,132 @@ export default function RemixHistoryPage() {
       original: "Dreams by Sarah Chen",
       date: "2024-03-14",
       duration: "02:20",
-      image:
-        "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/placeholder-ob7miW3mUreePYfXdVwkpFWHthzoR5.svg?height=60&width=60&query=abstract+colorful+music+art",
+      image: "/placeholder.svg?key=l7yh5",
     },
   ]
+
+  const handlePlayPause = (id: number) => {
+    if (currentlyPlaying === id) {
+      // If this track is already playing, pause it
+      audioRef.current?.pause()
+      setCurrentlyPlaying(null)
+    } else {
+      // If another track is playing, stop it first
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.currentTime = 0
+      }
+
+      // Create a new audio element and play the selected track
+      const audio = new Audio(audioSamples[id as keyof typeof audioSamples])
+      audio.onended = () => setCurrentlyPlaying(null)
+      audio.onerror = () => {
+        toast({
+          title: "Error",
+          description: "Failed to play audio. Please try again.",
+          variant: "destructive",
+        })
+        setCurrentlyPlaying(null)
+      }
+
+      audio.play().catch((error) => {
+        console.error("Error playing audio:", error)
+        toast({
+          title: "Error",
+          description: "Failed to play audio. Please try again.",
+          variant: "destructive",
+        })
+        setCurrentlyPlaying(null)
+      })
+
+      audioRef.current = audio
+      setCurrentlyPlaying(id)
+    }
+  }
+
+  const handleDownload = (id: number) => {
+    const audioUrl = audioSamples[id as keyof typeof audioSamples]
+    if (!audioUrl) return
+
+    fetch(audioUrl)
+      .then((response) => response.blob())
+      .then((blob) => {
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.style.display = "none"
+        a.href = url
+        a.download = `remix-${id}.mp3`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+
+        toast({
+          title: "Success",
+          description: "Audio downloaded successfully!",
+        })
+      })
+      .catch((error) => {
+        console.error("Error downloading audio:", error)
+        toast({
+          title: "Error",
+          description: "Failed to download audio. Please try again.",
+          variant: "destructive",
+        })
+      })
+  }
+
+  const handleShare = (id: number) => {
+    const title = remixes.find((remix) => remix.id === id)?.title || "Remix"
+    const url = window.location.href
+
+    if (navigator.share) {
+      navigator
+        .share({
+          title: title,
+          url: url,
+        })
+        .then(() => {
+          toast({
+            title: "Shared",
+            description: "Content shared successfully!",
+          })
+        })
+        .catch((error) => {
+          console.error("Error sharing:", error)
+          handleFallbackShare(url)
+        })
+    } else {
+      handleFallbackShare(url)
+    }
+  }
+
+  const handleFallbackShare = (url: string) => {
+    navigator.clipboard
+      .writeText(url)
+      .then(() => {
+        toast({
+          title: "Link Copied",
+          description: "Link copied to clipboard!",
+        })
+      })
+      .catch((error) => {
+        console.error("Error copying to clipboard:", error)
+        toast({
+          title: "Error",
+          description: "Failed to copy link. Please try again.",
+          variant: "destructive",
+        })
+      })
+  }
+
+  const handleDelete = (id: number) => {
+    // In a real app, you would delete from your database
+    toast({
+      title: "Deleted",
+      description: "Remix deleted successfully!",
+    })
+  }
 
   return (
     <div className="container py-8">
@@ -98,11 +229,29 @@ export default function RemixHistoryPage() {
             className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/30 p-4"
           >
             <div className="flex items-center gap-4">
-              <img
-                src={remix.image || "/placeholder.svg"}
-                alt={remix.title}
-                className="h-12 w-12 rounded-md object-cover"
-              />
+              <div className="relative group">
+                <img
+                  src={remix.image || "/placeholder.svg"}
+                  alt={remix.title}
+                  className="h-16 w-16 rounded-md object-cover"
+                  onError={(e) => {
+                    ;(e.target as HTMLImageElement).src = "/diverse-group-making-music.png"
+                  }}
+                />
+                <div
+                  className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-md cursor-pointer"
+                  onClick={() => handlePlayPause(remix.id)}
+                >
+                  {currentlyPlaying === remix.id ? (
+                    <Pause className="h-8 w-8 text-white" />
+                  ) : (
+                    <Play className="h-8 w-8 text-white" />
+                  )}
+                </div>
+                {currentlyPlaying === remix.id && (
+                  <div className="absolute inset-0 bg-cyan-500/20 rounded-md border-2 border-cyan-500"></div>
+                )}
+              </div>
               <div>
                 <h3 className="font-medium">{remix.title}</h3>
                 <p className="text-sm text-zinc-500">Original: {remix.original}</p>
@@ -114,13 +263,28 @@ export default function RemixHistoryPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <Button size="icon" variant="ghost" className="h-8 w-8 text-zinc-400 hover:text-cyan-400">
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 text-zinc-400 hover:text-cyan-400"
+                onClick={() => handleDownload(remix.id)}
+              >
                 <Download className="h-4 w-4" />
               </Button>
-              <Button size="icon" variant="ghost" className="h-8 w-8 text-zinc-400 hover:text-cyan-400">
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 text-zinc-400 hover:text-cyan-400"
+                onClick={() => handleShare(remix.id)}
+              >
                 <Share2 className="h-4 w-4" />
               </Button>
-              <Button size="icon" variant="ghost" className="h-8 w-8 text-zinc-400 hover:text-red-400">
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 text-zinc-400 hover:text-red-400"
+                onClick={() => handleDelete(remix.id)}
+              >
                 <Trash2 className="h-4 w-4" />
               </Button>
             </div>
@@ -137,11 +301,29 @@ export default function RemixHistoryPage() {
             className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/30 p-4"
           >
             <div className="flex items-center gap-4">
-              <img
-                src={remix.image || "/placeholder.svg"}
-                alt={remix.title}
-                className="h-12 w-12 rounded-md object-cover"
-              />
+              <div className="relative group">
+                <img
+                  src={remix.image || "/placeholder.svg"}
+                  alt={remix.title}
+                  className="h-16 w-16 rounded-md object-cover"
+                  onError={(e) => {
+                    ;(e.target as HTMLImageElement).src = "/diverse-group-making-music.png"
+                  }}
+                />
+                <div
+                  className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-md cursor-pointer"
+                  onClick={() => handlePlayPause(remix.id)}
+                >
+                  {currentlyPlaying === remix.id ? (
+                    <Pause className="h-8 w-8 text-white" />
+                  ) : (
+                    <Play className="h-8 w-8 text-white" />
+                  )}
+                </div>
+                {currentlyPlaying === remix.id && (
+                  <div className="absolute inset-0 bg-cyan-500/20 rounded-md border-2 border-cyan-500"></div>
+                )}
+              </div>
               <div>
                 <h3 className="font-medium">{remix.title}</h3>
                 <p className="text-sm text-zinc-500">Original: {remix.original}</p>
@@ -153,13 +335,28 @@ export default function RemixHistoryPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <Button size="icon" variant="ghost" className="h-8 w-8 text-zinc-400 hover:text-cyan-400">
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 text-zinc-400 hover:text-cyan-400"
+                onClick={() => handleDownload(remix.id)}
+              >
                 <Download className="h-4 w-4" />
               </Button>
-              <Button size="icon" variant="ghost" className="h-8 w-8 text-zinc-400 hover:text-cyan-400">
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 text-zinc-400 hover:text-cyan-400"
+                onClick={() => handleShare(remix.id)}
+              >
                 <Share2 className="h-4 w-4" />
               </Button>
-              <Button size="icon" variant="ghost" className="h-8 w-8 text-zinc-400 hover:text-red-400">
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 text-zinc-400 hover:text-red-400"
+                onClick={() => handleDelete(remix.id)}
+              >
                 <Trash2 className="h-4 w-4" />
               </Button>
             </div>

@@ -1,6 +1,7 @@
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/toaster"
 import "./globals.css"
+import { AudioProvider } from "@/components/audio-context"
 
 export const metadata = {
   title: "Composition Converter - AI Music Remix Platform",
@@ -13,7 +14,7 @@ export default function RootLayout({ children }) {
     <html lang="en" suppressHydrationWarning>
       <body className="bg-gradient-dark min-h-screen">
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
-          {children}
+          <AudioProvider>{children}</AudioProvider>
           <Toaster />
         </ThemeProvider>
       </body>
