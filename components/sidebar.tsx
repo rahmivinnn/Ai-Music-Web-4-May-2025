@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, History, Library, CreditCard, Bell, Settings, Music, Heart, Waveform, Headphones } from "lucide-react"
+import { Home, History, Library, CreditCard, Bell, Settings, Music, Heart, Waveform, Headphones, Sparkles } from "lucide-react"
 import Image from "next/image"
 
 export function Sidebar() {
@@ -57,6 +57,13 @@ export function Sidebar() {
         >
           <Waveform className="h-5 w-5" />
           <span>EDM Remix Studio</span>
+        </Link>
+        <Link
+          href="/premium-remix"
+          className={`sidebar-link ${pathname === "/premium-remix" ? "active bg-cyan-500/10 text-cyan-400" : ""}`}
+        >
+          <Sparkles className="h-5 w-5" />
+          <span>Premium Remix</span>
         </Link>
         <Link
           href="/subscription"
