@@ -1,7 +1,7 @@
 // One-sided Love Song Generator
 // This file contains the implementation for generating a pop song with a one-sided love theme
 
-import { generateMusic } from "./actions/music-actions";
+import { generateMusic } from "./actions/audio-actions";
 
 // Song details
 const songDetails = {
@@ -89,6 +89,14 @@ export async function generateOneSidedLoveSong() {
     // This is a professionally produced sample that matches our theme
     const highQualityFallback = "https://assets.mixkit.co/music/preview/mixkit-sad-melancholic-classical-strings-2848.mp3";
 
+    // Alternative fallbacks in case the primary one fails
+    const fallbackOptions = [
+      "https://assets.mixkit.co/music/preview/mixkit-sad-melancholic-classical-strings-2848.mp3",
+      "https://assets.mixkit.co/music/preview/mixkit-piano-reflections-22.mp3",
+      "https://assets.mixkit.co/music/preview/mixkit-serene-view-443.mp3",
+      "https://assets.mixkit.co/music/preview/mixkit-dreaming-big-31.mp3"
+    ];
+
     console.warn("Music generation returned unsuccessful, using high-quality fallback");
 
     return {
@@ -106,10 +114,22 @@ export async function generateOneSidedLoveSong() {
     // Using a different fallback than above to ensure we have options
     const emergencyFallback = "https://assets.mixkit.co/music/preview/mixkit-piano-reflections-22.mp3";
 
+    // Try multiple fallbacks to ensure at least one works
+    const fallbackOptions = [
+      "https://assets.mixkit.co/music/preview/mixkit-piano-reflections-22.mp3",
+      "https://assets.mixkit.co/music/preview/mixkit-sad-melancholic-classical-strings-2848.mp3",
+      "https://assets.mixkit.co/music/preview/mixkit-serene-view-443.mp3",
+      "https://assets.mixkit.co/music/preview/mixkit-dreaming-big-31.mp3",
+      // Add local fallbacks as well
+      "/samples/sad-piano.mp3",
+      "/samples/love-song-demo.mp3"
+    ];
+
     return {
       title: songDetails.title,
       lyrics: lyrics,
       audioUrl: emergencyFallback,
+      fallbackUrls: fallbackOptions, // Provide multiple options for the player to try
       details: songDetails,
       success: true,
       fallback: true,

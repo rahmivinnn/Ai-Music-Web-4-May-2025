@@ -63,10 +63,20 @@ export async function generateAudio({ prompt, voice = "alloy", model = "tts-1", 
     // Fallback to standard samples if HD isn't available
     const sampleUrl = `/samples/${voiceType}-${style === "neutral" ? "" : style + "-"}sample.mp3`
 
+    // Provide multiple fallback URLs for better compatibility
+    const fallbackUrls = [
+      sampleUrl,
+      // External fallbacks that are known to work
+      "https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3",
+      "https://assets.mixkit.co/music/preview/mixkit-dreaming-big-31.mp3",
+      "https://assets.mixkit.co/music/preview/mixkit-pop-01-678.mp3"
+    ]
+
     console.log(`[DUMMY] Audio generation complete. Using sample file: ${sampleUrl}`)
 
     return {
       audioUrl: sampleUrl,
+      fallbackUrls: fallbackUrls,
       success: true,
       isDummy: true,
       prompt: prompt,
@@ -94,41 +104,121 @@ export async function generateMusic({ prompt, genre, bpm, duration }) {
 
   // Select a sample based on genre and BPM
   let sampleUrl
+  let fallbackUrls = []
 
+  // Add all potential URLs to the fallback list
+  const allSamples = {
+    rock: [
+      "https://assets.mixkit.co/music/preview/mixkit-driving-ambition-32.mp3",
+      "https://assets.mixkit.co/music/preview/mixkit-epical-drums-01-676.mp3"
+    ],
+    hiphop: [
+      "https://assets.mixkit.co/music/preview/mixkit-hip-hop-02-621.mp3",
+      "https://assets.mixkit.co/music/preview/mixkit-urban-fashion-171.mp3"
+    ],
+    sad: [
+      "https://assets.mixkit.co/music/preview/mixkit-sad-melancholic-classical-strings-2848.mp3",
+      "https://assets.mixkit.co/music/preview/mixkit-piano-reflections-22.mp3"
+    ],
+    classic: [
+      "https://assets.mixkit.co/music/preview/mixkit-serene-view-443.mp3",
+      "https://assets.mixkit.co/music/preview/mixkit-just-kidding-11.mp3"
+    ],
+    electronic: {
+      fast: [
+        "https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3",
+        "https://assets.mixkit.co/music/preview/mixkit-c-major-house-657.mp3"
+      ],
+      medium: [
+        "https://assets.mixkit.co/music/preview/mixkit-house-party-hard-beat-11.mp3",
+        "https://assets.mixkit.co/music/preview/mixkit-a-very-happy-christmas-51.mp3"
+      ],
+      slow: [
+        "https://assets.mixkit.co/music/preview/mixkit-deep-urban-623.mp3",
+        "https://assets.mixkit.co/music/preview/mixkit-trip-hop-vibes-149.mp3"
+      ]
+    },
+    ambient: [
+      "https://assets.mixkit.co/music/preview/mixkit-dreaming-big-31.mp3",
+      "https://assets.mixkit.co/music/preview/mixkit-serene-view-443.mp3"
+    ],
+    jazz: [
+      "https://assets.mixkit.co/music/preview/mixkit-jazz-bar-background-164.mp3",
+      "https://assets.mixkit.co/music/preview/mixkit-smooth-lounge-112.mp3"
+    ],
+    pop: [
+      "https://assets.mixkit.co/music/preview/mixkit-pop-01-678.mp3",
+      "https://assets.mixkit.co/music/preview/mixkit-a-very-happy-christmas-51.mp3"
+    ]
+  }
+
+  // Add all samples to fallback list for maximum compatibility
+  Object.values(allSamples).forEach(category => {
+    if (Array.isArray(category)) {
+      fallbackUrls = [...fallbackUrls, ...category]
+    } else if (typeof category === 'object') {
+      Object.values(category).forEach(subCategory => {
+        if (Array.isArray(subCategory)) {
+          fallbackUrls = [...fallbackUrls, ...subCategory]
+        }
+      })
+    }
+  })
+
+  // Select primary URL based on genre and BPM
   switch (genre?.toLowerCase()) {
     case "rock":
-      sampleUrl = "https://assets.mixkit.co/music/preview/mixkit-driving-ambition-32.mp3"
+      sampleUrl = allSamples.rock[0]
       break
     case "hiphop":
-      sampleUrl = "https://assets.mixkit.co/music/preview/mixkit-hip-hop-02-621.mp3"
+      sampleUrl = allSamples.hiphop[0]
       break
     case "sad":
-      sampleUrl = "https://assets.mixkit.co/music/preview/mixkit-sad-melancholic-classical-strings-2848.mp3"
+      sampleUrl = allSamples.sad[0]
       break
     case "classic":
-      sampleUrl = "https://assets.mixkit.co/music/preview/mixkit-serene-view-443.mp3"
+      sampleUrl = allSamples.classic[0]
       break
     case "electronic":
       if (bpm && bpm > 140) {
-        sampleUrl = "https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3"
+        sampleUrl = allSamples.electronic.fast[0]
       } else if (bpm && bpm > 100) {
-        sampleUrl = "https://assets.mixkit.co/music/preview/mixkit-house-party-hard-beat-11.mp3"
+        sampleUrl = allSamples.electronic.medium[0]
       } else {
-        sampleUrl = "https://assets.mixkit.co/music/preview/mixkit-deep-urban-623.mp3"
+        sampleUrl = allSamples.electronic.slow[0]
       }
       break
     case "ambient":
-      sampleUrl = "https://assets.mixkit.co/music/preview/mixkit-dreaming-big-31.mp3"
+      sampleUrl = allSamples.ambient[0]
       break
     case "jazz":
-      sampleUrl = "https://assets.mixkit.co/music/preview/mixkit-jazz-bar-background-164.mp3"
+      sampleUrl = allSamples.jazz[0]
+      break
+    case "pop":
+      sampleUrl = allSamples.pop[0]
       break
     default:
-      sampleUrl = "https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3"
+      // Default to pop for unknown genres
+      sampleUrl = allSamples.pop[0]
+  }
+
+  // Verify the URL is accessible with a HEAD request
+  try {
+    const response = await fetch(sampleUrl, { method: 'HEAD' })
+    if (!response.ok) {
+      console.warn(`Primary audio URL ${sampleUrl} is not accessible, using fallback`)
+      // Use the first fallback URL
+      sampleUrl = fallbackUrls[0]
+    }
+  } catch (error) {
+    console.error("Error checking audio URL:", error)
+    // Use the first fallback URL
+    sampleUrl = fallbackUrls[0]
   }
 
   return {
     audioUrl: sampleUrl,
+    fallbackUrls: fallbackUrls,
     success: true,
     isDummy: true,
     message: "This is a dummy implementation using sample audio files.",

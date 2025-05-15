@@ -2,9 +2,23 @@
 
 import { useEffect, useRef } from "react"
 
-export function AudioVisualizer({ isPlaying, audioFile, analyserNode, currentTime, duration }) {
-  const canvasRef = useRef(null)
-  const animationRef = useRef(null)
+interface AudioVisualizerProps {
+  isPlaying: boolean;
+  audioFile: { url: string } | null;
+  analyserNode: AnalyserNode | null;
+  currentTime: number;
+  duration: number;
+}
+
+export function AudioVisualizer({
+  isPlaying,
+  audioFile,
+  analyserNode,
+  currentTime,
+  duration
+}: AudioVisualizerProps) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const animationRef = useRef<number | null>(null)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -113,7 +127,7 @@ export function AudioVisualizer({ isPlaying, audioFile, analyserNode, currentTim
     }
   }, [isPlaying, audioFile, analyserNode, currentTime, duration])
 
-  const formatTime = (seconds) => {
+  const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
     const secs = Math.floor(seconds % 60)
     return `${mins}:${secs.toString().padStart(2, "0")}`
