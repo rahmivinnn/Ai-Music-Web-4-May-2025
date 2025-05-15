@@ -39,7 +39,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# lib/ # We need this directory for our JavaScript implementation
 lib64/
 parts/
 sdist/
