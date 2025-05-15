@@ -203,7 +203,7 @@ export default function HomePage() {
         Remix songs into EDM beats or generate unique audio from text using Composition converter.
       </p>
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
         <div className="remix-card bg-gradient-to-br from-cyan-900/20 to-black p-6">
           <div className="flex items-start justify-between">
             <div>
@@ -276,6 +276,55 @@ export default function HomePage() {
                   fill="#00c0c0"
                 />
                 <circle cx="40" cy="40" r="10" fill="#00e0e0" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div className="remix-card bg-gradient-to-br from-pink-900/20 to-black p-6">
+          <div className="flex items-start justify-between">
+            <div>
+              <h2 className="mb-2 text-2xl font-bold text-pink-400">One-Sided Love Song</h2>
+              <p className="mb-6 text-zinc-400">
+                Generate a beautiful pop song about unrequited love with soft female vocals and emotional melodies.
+              </p>
+              <Link href="/one-sided-love">
+                <Button className="bg-pink-600 hover:bg-pink-700">
+                  <Heart className="mr-2 h-4 w-4" />
+                  Create Love Song
+                </Button>
+              </Link>
+
+              {/* Features */}
+              <div className="mt-4 p-3 bg-black/30 rounded-lg border border-pink-900/30">
+                <h3 className="text-sm font-medium text-pink-400 mb-2">Emotional Song Features</h3>
+                <div className="flex flex-wrap gap-2">
+                  <span className="px-2 py-1 bg-pink-900/30 text-xs rounded-full text-pink-300">Soft Vocals</span>
+                  <span className="px-2 py-1 bg-pink-900/30 text-xs rounded-full text-pink-300">Emotional Lyrics</span>
+                  <span className="px-2 py-1 bg-pink-900/30 text-xs rounded-full text-pink-300">Catchy Chorus</span>
+                  <span className="px-2 py-1 bg-pink-900/30 text-xs rounded-full text-pink-300">Piano Melody</span>
+                </div>
+              </div>
+            </div>
+            <div className="ml-4 flex-shrink-0">
+              <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M40 10C23.4315 10 10 23.4315 10 40C10 56.5685 23.4315 70 40 70C56.5685 70 70 56.5685 70 40C70 23.4315 56.5685 10 40 10ZM40 65C26.1929 65 15 53.8071 15 40C15 26.1929 26.1929 15 40 15C53.8071 15 65 26.1929 65 40C65 53.8071 53.8071 65 40 65Z"
+                  fill="#ff6b9d"
+                />
+                <path
+                  d="M40 20C29.0543 20 20 29.0543 20 40C20 50.9457 29.0543 60 40 60C50.9457 60 60 50.9457 60 40C60 29.0543 50.9457 20 40 20ZM40 55C31.7157 55 25 48.2843 25 40C25 31.7157 31.7157 25 40 25C48.2843 25 55 31.7157 55 40C55 48.2843 48.2843 55 40 55Z"
+                  fill="#ff4d8b"
+                />
+                <path
+                  d="M40 30C34.4772 30 30 34.4772 30 40C30 45.5228 34.4772 50 40 50C45.5228 50 50 45.5228 50 40C50 34.4772 45.5228 30 40 30ZM40 45C37.2386 45 35 42.7614 35 40C35 37.2386 37.2386 35 40 35C42.7614 35 45 37.2386 45 40C45 42.7614 42.7614 45 40 45Z"
+                  fill="#ff3385"
+                />
+                <path
+                  d="M65 25C65 25 55 15 40 15C25 15 15 25 15 25L40 50L65 25Z"
+                  fill="#ff3385"
+                  fillOpacity="0.5"
+                />
               </svg>
             </div>
           </div>

@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, History, Library, CreditCard, Bell, Settings } from "lucide-react"
+import { Home, History, Library, CreditCard, Bell, Settings, Music, Heart } from "lucide-react"
 import Image from "next/image"
 
 export function Sidebar() {
@@ -43,6 +43,13 @@ export function Sidebar() {
         >
           <Library className="h-5 w-5" />
           <span>My Library</span>
+        </Link>
+        <Link
+          href="/one-sided-love"
+          className={`sidebar-link ${pathname === "/one-sided-love" ? "active bg-cyan-500/10 text-cyan-400" : ""}`}
+        >
+          <Heart className="h-5 w-5" />
+          <span>Love Song</span>
         </Link>
         <Link
           href="/subscription"
