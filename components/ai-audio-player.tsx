@@ -642,7 +642,20 @@ export function AIAudioPlayer({
         </div>
       </div>
 
-      {error ? (
+      {/* Always render the audio element */}
+      <audio
+        ref={audioRef}
+        src={actualAudioUrl}
+        preload="metadata"
+        loop={loop}
+        onEnded={() => setIsPlaying(false)}
+        onPause={() => setIsPlaying(false)}
+        onPlay={() => setIsPlaying(true)}
+        className="hidden"
+      />
+
+      {/* Show error message if there is an error */}
+      {error && (
         <div className="flex flex-col items-center justify-center py-4 text-center">
           <AlertCircle className="h-8 w-8 text-red-500 mb-2" />
           <p className="text-red-400 text-sm">{error}</p>
@@ -655,17 +668,6 @@ export function AIAudioPlayer({
             Reload Page
           </Button>
         </div>
-      ) : (
-        <audio
-          ref={audioRef}
-          src={actualAudioUrl}
-          preload="metadata"
-          loop={loop}
-          onEnded={() => setIsPlaying(false)}
-          onPause={() => setIsPlaying(false)}
-          onPlay={() => setIsPlaying(true)}
-          className="hidden"
-        />
       )}
     </div>
   )
