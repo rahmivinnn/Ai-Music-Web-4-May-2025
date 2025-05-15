@@ -1,17 +1,38 @@
 "use client"
 
 import Link from "next/link"
-import { useState, useEffect } from "react"
-import { Music, Wand2, Heart, Play, Pause, Download, Shuffle, Volume2 } from "lucide-react"
+import { useState, useEffect, useRef } from "react"
+import { Music, Wand2, Heart, Play, Pause, Download, Shuffle, Volume2, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { PersistentAivaIntegration } from "@/components/persistent-aiva-integration"
+import { useToast } from "@/components/ui/use-toast"
 
 export default function HomePage() {
   const [playingTrackId, setPlayingTrackId] = useState<number | null>(null)
   const [imageErrors, setImageErrors] = useState<{ [key: string]: boolean }>({})
   const [audioLoaded, setAudioLoaded] = useState<{ [key: number]: boolean }>({})
   const [audioError, setAudioError] = useState<{ [key: number]: boolean }>({})
+  const [showPersistentIntegration, setShowPersistentIntegration] = useState(false)
+  const [isRetrying, setIsRetrying] = useState<{ [key: number]: boolean }>({})
+  const audioElements = useRef<{ [key: number]: HTMLAudioElement | null }>({})
+  const { toast } = useToast()
 
-  // EDM playlists with guaranteed working image URLs and audio URLs
+  // Reliable audio URLs that are guaranteed to work
+  const reliableAudioUrls = {
+    // Main fallback audio URLs (hosted on reliable CDNs)
+    fallback1: "https://cdn.pixabay.com/audio/2022/11/17/audio_febc508a42.mp3",
+    fallback2: "https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3",
+    fallback3: "https://cdn.pixabay.com/audio/2022/03/15/audio_c8b9758c8d.mp3",
+    fallback4: "https://cdn.pixabay.com/audio/2022/01/18/audio_d0f6d2e0d7.mp3",
+    fallback5: "https://cdn.pixabay.com/audio/2022/08/04/audio_2dde668d05.mp3",
+    fallback6: "https://cdn.pixabay.com/audio/2022/10/25/audio_864e7672de.mp3",
+    // AI track fallbacks
+    fallbackAI1: "https://cdn.pixabay.com/audio/2022/05/16/audio_8cc0501d62.mp3",
+    fallbackAI2: "https://cdn.pixabay.com/audio/2022/10/28/audio_f52a5134b1.mp3",
+    fallbackAI3: "https://cdn.pixabay.com/audio/2022/08/02/audio_2dde668d05.mp3",
+  }
+
+  // EDM playlists with multiple audio URL options for reliability
   const edmPlaylists = [
     {
       id: 1,
@@ -21,6 +42,11 @@ export default function HomePage() {
       image: "https://cdn.pixabay.com/photo/2016/11/23/15/48/audience-1853662_1280.jpg",
       fallbackImage: "https://cdn.pixabay.com/photo/2015/04/14/17/08/festival-722773_1280.jpg",
       audioUrl: "https://cdn.pixabay.com/audio/2022/11/17/audio_febc508a42.mp3",
+      fallbackAudioUrls: [
+        reliableAudioUrls.fallback1,
+        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+        "https://samplelib.com/lib/preview/mp3/sample-3s.mp3",
+      ],
     },
     {
       id: 2,
@@ -30,6 +56,11 @@ export default function HomePage() {
       image: "https://cdn.pixabay.com/photo/2016/11/22/19/15/hand-1850120_1280.jpg",
       fallbackImage: "https://cdn.pixabay.com/photo/2019/09/17/18/48/computer-4484282_1280.jpg",
       audioUrl: "https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3",
+      fallbackAudioUrls: [
+        reliableAudioUrls.fallback2,
+        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+        "https://samplelib.com/lib/preview/mp3/sample-6s.mp3",
+      ],
     },
     {
       id: 3,
@@ -39,6 +70,11 @@ export default function HomePage() {
       image: "https://cdn.pixabay.com/photo/2017/07/21/23/57/concert-2527495_1280.jpg",
       fallbackImage: "https://cdn.pixabay.com/photo/2016/11/29/06/17/audience-1867754_1280.jpg",
       audioUrl: "https://cdn.pixabay.com/audio/2022/03/15/audio_c8b9758c8d.mp3",
+      fallbackAudioUrls: [
+        reliableAudioUrls.fallback3,
+        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
+        "https://samplelib.com/lib/preview/mp3/sample-9s.mp3",
+      ],
     },
     {
       id: 4,
@@ -48,6 +84,11 @@ export default function HomePage() {
       image: "https://cdn.pixabay.com/photo/2017/11/24/10/43/ticket-2974645_1280.jpg",
       fallbackImage: "https://cdn.pixabay.com/photo/2018/06/17/10/38/artist-3480274_1280.jpg",
       audioUrl: "https://cdn.pixabay.com/audio/2022/01/18/audio_d0f6d2e0d7.mp3",
+      fallbackAudioUrls: [
+        reliableAudioUrls.fallback4,
+        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
+        "https://samplelib.com/lib/preview/mp3/sample-12s.mp3",
+      ],
     },
     {
       id: 5,
@@ -57,6 +98,11 @@ export default function HomePage() {
       image: "https://cdn.pixabay.com/photo/2016/11/23/15/48/audience-1853662_1280.jpg",
       fallbackImage: "https://cdn.pixabay.com/photo/2016/11/22/19/15/hand-1850120_1280.jpg",
       audioUrl: "https://cdn.pixabay.com/audio/2022/08/04/audio_2dde668d05.mp3",
+      fallbackAudioUrls: [
+        reliableAudioUrls.fallback5,
+        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3",
+        "https://samplelib.com/lib/preview/mp3/sample-15s.mp3",
+      ],
     },
     {
       id: 6,
@@ -66,10 +112,15 @@ export default function HomePage() {
       image: "https://cdn.pixabay.com/photo/2014/05/21/15/18/musician-349790_1280.jpg",
       fallbackImage: "https://cdn.pixabay.com/photo/2015/03/08/17/25/musician-664432_1280.jpg",
       audioUrl: "https://cdn.pixabay.com/audio/2022/10/25/audio_864e7672de.mp3",
+      fallbackAudioUrls: [
+        reliableAudioUrls.fallback6,
+        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3",
+        "https://samplelib.com/lib/preview/mp3/sample-15s.mp3",
+      ],
     },
   ]
 
-  // AI EDM tracks with guaranteed working image URLs and audio URLs
+  // AI EDM tracks with multiple audio URL options for reliability
   const aiEdmTracks = [
     {
       id: 101,
@@ -78,6 +129,11 @@ export default function HomePage() {
       coverUrl: "https://cdn.pixabay.com/photo/2019/08/23/08/26/music-4425334_1280.jpg",
       fallbackCover: "https://cdn.pixabay.com/photo/2015/05/15/14/50/concert-768722_1280.jpg",
       audioUrl: "https://cdn.pixabay.com/audio/2022/05/16/audio_8cc0501d62.mp3",
+      fallbackAudioUrls: [
+        reliableAudioUrls.fallbackAI1,
+        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3",
+        "https://samplelib.com/lib/preview/mp3/sample-9s.mp3",
+      ],
     },
     {
       id: 102,
@@ -86,6 +142,11 @@ export default function HomePage() {
       coverUrl: "https://cdn.pixabay.com/photo/2016/11/19/13/57/drum-set-1839383_1280.jpg",
       fallbackCover: "https://cdn.pixabay.com/photo/2019/11/14/03/22/dj-4625286_1280.jpg",
       audioUrl: "https://cdn.pixabay.com/audio/2022/10/28/audio_f52a5134b1.mp3",
+      fallbackAudioUrls: [
+        reliableAudioUrls.fallbackAI2,
+        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3",
+        "https://samplelib.com/lib/preview/mp3/sample-12s.mp3",
+      ],
     },
     {
       id: 103,
@@ -94,35 +155,84 @@ export default function HomePage() {
       coverUrl: "https://cdn.pixabay.com/photo/2016/11/22/19/15/hand-1850120_1280.jpg",
       fallbackCover: "https://cdn.pixabay.com/photo/2019/09/08/19/13/autumn-4461685_1280.jpg",
       audioUrl: "https://cdn.pixabay.com/audio/2022/08/02/audio_2dde668d05.mp3",
+      fallbackAudioUrls: [
+        reliableAudioUrls.fallbackAI3,
+        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-9.mp3",
+        "https://samplelib.com/lib/preview/mp3/sample-15s.mp3",
+      ],
     },
   ]
 
-  // Preload audio files to ensure they're ready to play
+  // Check if integration is already in progress
   useEffect(() => {
-    const preloadAudio = (id: number, url: string) => {
-      const audio = new Audio()
-      audio.src = url
-      audio.preload = "auto"
+    const savedProgress = localStorage.getItem("aivaIntegrationProgress")
+    if (savedProgress) {
+      setShowPersistentIntegration(true)
+    }
+  }, [])
 
+  // Preload audio files with robust error handling and fallbacks
+  useEffect(() => {
+    const preloadAudio = (id: number, urls: string[], currentUrlIndex = 0) => {
+      // If we've tried all URLs, mark as error
+      if (currentUrlIndex >= urls.length) {
+        console.error(`All audio URLs failed for track ${id}`)
+        setAudioError((prev) => ({ ...prev, [id]: true }))
+        setAudioLoaded((prev) => ({ ...prev, [id]: false }))
+        return
+      }
+
+      const currentUrl = urls[currentUrlIndex]
+      const audio = new Audio()
+
+      // Store reference to audio element
+      audioElements.current[id] = audio
+
+      // Set up event listeners
       audio.addEventListener("canplaythrough", () => {
         setAudioLoaded((prev) => ({ ...prev, [id]: true }))
+        setAudioError((prev) => ({ ...prev, [id]: false }))
+        setIsRetrying((prev) => ({ ...prev, [id]: false }))
       })
 
-      audio.addEventListener("error", () => {
-        console.error(`Error loading audio for track ${id}`)
-        setAudioError((prev) => ({ ...prev, [id]: true }))
+      audio.addEventListener("error", (e) => {
+        console.warn(`Error loading audio for track ${id} with URL ${currentUrl}:`, e)
+
+        // Try next fallback URL
+        setIsRetrying((prev) => ({ ...prev, [id]: true }))
+        setTimeout(() => {
+          preloadAudio(id, urls, currentUrlIndex + 1)
+        }, 1000) // Add delay before trying next URL
       })
+
+      // Set source and start loading
+      audio.src = currentUrl
+      audio.preload = "auto"
+      audio.load()
     }
 
-    // Preload all playlist audio
+    // Preload all playlist audio with fallbacks
     edmPlaylists.forEach((playlist) => {
-      preloadAudio(playlist.id, playlist.audioUrl)
+      const allUrls = [playlist.audioUrl, ...playlist.fallbackAudioUrls]
+      preloadAudio(playlist.id, allUrls)
     })
 
-    // Preload all AI track audio
+    // Preload all AI track audio with fallbacks
     aiEdmTracks.forEach((track) => {
-      preloadAudio(track.id, track.audioUrl)
+      const allUrls = [track.audioUrl, ...track.fallbackAudioUrls]
+      preloadAudio(track.id, allUrls)
     })
+
+    // Cleanup function
+    return () => {
+      Object.values(audioElements.current).forEach((audio) => {
+        if (audio) {
+          audio.pause()
+          audio.src = ""
+          audio.load()
+        }
+      })
+    }
   }, [])
 
   // Handle image error by setting a flag to use fallback
@@ -133,11 +243,28 @@ export default function HomePage() {
     }))
   }
 
-  // Toggle play/pause for a track
+  // Get current audio URL for a track (primary or fallback)
+  const getAudioUrl = (id: number) => {
+    // Find the track in playlists or AI tracks
+    const playlist = edmPlaylists.find((p) => p.id === id)
+    const aiTrack = aiEdmTracks.find((t) => t.id === id)
+
+    const track = playlist || aiTrack
+    if (!track) return ""
+
+    // If there was an error with the primary URL, use the first fallback
+    if (audioError[id]) {
+      return "fallbackAudioUrls" in track ? track.fallbackAudioUrls[0] : ""
+    }
+
+    return track.audioUrl
+  }
+
+  // Toggle play/pause for a track with robust error handling
   const togglePlay = (id: number) => {
     if (playingTrackId === id) {
       // Pause the current track
-      const audio = document.getElementById(`audio-${id}`) as HTMLAudioElement
+      const audio = audioElements.current[id]
       if (audio) {
         audio.pause()
       }
@@ -145,14 +272,14 @@ export default function HomePage() {
     } else {
       // If another track is playing, pause it first
       if (playingTrackId !== null) {
-        const previousAudio = document.getElementById(`audio-${playingTrackId}`) as HTMLAudioElement
+        const previousAudio = audioElements.current[playingTrackId]
         if (previousAudio) {
           previousAudio.pause()
         }
       }
 
       // Play the new track
-      const audio = document.getElementById(`audio-${id}`) as HTMLAudioElement
+      const audio = audioElements.current[id]
       if (audio) {
         // Reset the audio to the beginning if it was played before
         audio.currentTime = 0
@@ -165,45 +292,206 @@ export default function HomePage() {
             })
             .catch((error) => {
               console.error("Error playing audio:", error)
-              // Try an alternative approach for mobile browsers
-              setTimeout(() => {
-                audio
-                  .play()
-                  .then(() => setPlayingTrackId(id))
-                  .catch((err) => console.error("Second attempt failed:", err))
-              }, 100)
+
+              // Try to reload the audio with a fallback URL
+              const track = edmPlaylists.find((p) => p.id === id) || aiEdmTracks.find((t) => t.id === id)
+              if (track && "fallbackAudioUrls" in track && track.fallbackAudioUrls.length > 0) {
+                toast({
+                  title: "Playback Issue",
+                  description: "Trying alternative audio source...",
+                  variant: "default",
+                })
+
+                // Try the first fallback URL
+                audio.src = track.fallbackAudioUrls[0]
+                audio.load()
+
+                // Try playing again after a short delay
+                setTimeout(() => {
+                  audio
+                    .play()
+                    .then(() => setPlayingTrackId(id))
+                    .catch((err) => {
+                      console.error("Fallback playback failed:", err)
+                      toast({
+                        title: "Playback Failed",
+                        description: "Could not play this track. Please try another.",
+                        variant: "destructive",
+                      })
+                    })
+                }, 1000)
+              } else {
+                toast({
+                  title: "Playback Failed",
+                  description: "Could not play this track. Please try another.",
+                  variant: "destructive",
+                })
+              }
             })
         }
+      } else {
+        toast({
+          title: "Track Not Ready",
+          description: "This track is still loading. Please try again in a moment.",
+          variant: "default",
+        })
       }
     }
   }
 
-  // Function to handle direct download
-  const downloadTrack = (url: string, filename: string) => {
-    // Create an invisible anchor element
-    const a = document.createElement("a")
-    a.style.display = "none"
-    a.href = url
-    a.download = filename + ".mp3"
+  // Retry loading a track that failed
+  const retryLoadTrack = (id: number) => {
+    setIsRetrying((prev) => ({ ...prev, [id]: true }))
 
-    // Add to document, trigger click, and remove
-    document.body.appendChild(a)
-    a.click()
+    // Find the track
+    const playlist = edmPlaylists.find((p) => p.id === id)
+    const aiTrack = aiEdmTracks.find((t) => t.id === id)
+    const track = playlist || aiTrack
 
-    // Clean up
-    setTimeout(() => {
-      document.body.removeChild(a)
-    }, 100)
+    if (!track || !("fallbackAudioUrls" in track)) return
+
+    // Try loading with the first fallback URL
+    const audio = new Audio()
+    audioElements.current[id] = audio
+
+    audio.addEventListener("canplaythrough", () => {
+      setAudioLoaded((prev) => ({ ...prev, [id]: true }))
+      setAudioError((prev) => ({ ...prev, [id]: false }))
+      setIsRetrying((prev) => ({ ...prev, [id]: false }))
+
+      toast({
+        title: "Track Loaded",
+        description: `"${track.title}" is now ready to play.`,
+        variant: "default",
+      })
+    })
+
+    audio.addEventListener("error", () => {
+      setAudioError((prev) => ({ ...prev, [id]: true }))
+      setIsRetrying((prev) => ({ ...prev, [id]: false }))
+
+      toast({
+        title: "Loading Failed",
+        description: "Could not load this track. Please try again later.",
+        variant: "destructive",
+      })
+    })
+
+    // Try the first fallback URL
+    audio.src = track.fallbackAudioUrls[0]
+    audio.preload = "auto"
+    audio.load()
+
+    toast({
+      title: "Retrying...",
+      description: `Attempting to reload "${track.title}"`,
+      variant: "default",
+    })
+  }
+
+  // Function to handle direct download with fallbacks
+  const downloadTrack = (id: number, filename: string) => {
+    // Find the track
+    const playlist = edmPlaylists.find((p) => p.id === id)
+    const aiTrack = aiEdmTracks.find((t) => t.id === id)
+    const track = playlist || aiTrack
+
+    if (!track) {
+      toast({
+        title: "Download Failed",
+        description: "Track information not found.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Get the best available URL
+    const url = getAudioUrl(id)
+    if (!url) {
+      toast({
+        title: "Download Failed",
+        description: "No valid audio URL found for this track.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Use fetch to handle CORS issues
+    toast({
+      title: "Preparing Download",
+      description: "Getting track ready for download...",
+      variant: "default",
+    })
+
+    fetch(url)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+        return response.blob()
+      })
+      .then((blob) => {
+        // Create a blob URL
+        const blobUrl = URL.createObjectURL(blob)
+
+        // Create an invisible anchor element
+        const a = document.createElement("a")
+        a.style.display = "none"
+        a.href = blobUrl
+        a.download = filename + ".mp3"
+
+        // Add to document, trigger click, and remove
+        document.body.appendChild(a)
+        a.click()
+
+        // Clean up
+        setTimeout(() => {
+          document.body.removeChild(a)
+          URL.revokeObjectURL(blobUrl)
+        }, 100)
+
+        toast({
+          title: "Download Started",
+          description: `${filename} is downloading to your device.`,
+          variant: "default",
+        })
+      })
+      .catch((error) => {
+        console.error("Download error:", error)
+
+        toast({
+          title: "Download Failed",
+          description: "There was a problem downloading this track. Please try again.",
+          variant: "destructive",
+        })
+      })
+  }
+
+  // Function to handle AIVA integration button click
+  const handleAivaIntegration = () => {
+    setShowPersistentIntegration(true)
+
+    // Initialize integration progress in localStorage
+    localStorage.setItem("aivaIntegrationProgress", "0")
+    localStorage.setItem("aivaIntegrationTimestamp", Date.now().toString())
+
+    toast({
+      title: "AIVA Integration Started",
+      description: "The integration process has begun and will continue in the background.",
+      variant: "default",
+    })
   }
 
   return (
     <div className="container py-8">
+      {showPersistentIntegration && <PersistentAivaIntegration />}
+
       <h1 className="mb-2 text-3xl font-bold">AI-Powered Music Creation</h1>
       <p className="mb-8 text-zinc-400">
         Remix songs into EDM beats or generate unique audio from text using Composition converter.
       </p>
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <div className="remix-card bg-gradient-to-br from-cyan-900/20 to-black p-6">
           <div className="flex items-start justify-between">
             <div>
@@ -211,20 +499,12 @@ export default function HomePage() {
               <p className="mb-6 text-zinc-400">
                 Transform any song into an EDM remix with AI-powered creativity. Upload, remix, and enjoy!
               </p>
-              <div className="flex flex-wrap gap-2">
-                <Link href="/remix">
-                  <Button className="bg-cyan-600 hover:bg-cyan-700">
-                    <Music className="mr-2 h-4 w-4" />
-                    Create remix
-                  </Button>
-                </Link>
-
-                <Link href="/premium-remix">
-                  <Button className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700">
-                    <span className="mr-1">✨</span> Premium Studio
-                  </Button>
-                </Link>
-              </div>
+              <Link href="/remix">
+                <Button className="bg-cyan-600 hover:bg-cyan-700">
+                  <Music className="mr-2 h-4 w-4" />
+                  Create remix
+                </Button>
+              </Link>
 
               {/* New feature: Clear EDM Effects options */}
               <div className="mt-4 p-3 bg-black/30 rounded-lg border border-cyan-900/30">
@@ -288,79 +568,48 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+      </div>
 
-        <div className="remix-card bg-gradient-to-br from-pink-900/20 to-black p-6">
-          <div className="flex items-start justify-between">
-            <div>
-              <h2 className="mb-2 text-2xl font-bold text-pink-400">One-Sided Love Song</h2>
-              <p className="mb-6 text-zinc-400">
-                Generate a beautiful pop song about unrequited love with soft female vocals and emotional melodies.
-              </p>
-              <Link href="/one-sided-love">
-                <Button className="bg-pink-600 hover:bg-pink-700">
-                  <Heart className="mr-2 h-4 w-4" />
-                  Create Love Song
-                </Button>
-              </Link>
-
-              {/* Features */}
-              <div className="mt-4 p-3 bg-black/30 rounded-lg border border-pink-900/30">
-                <h3 className="text-sm font-medium text-pink-400 mb-2">Emotional Song Features</h3>
-                <div className="flex flex-wrap gap-2">
-                  <span className="px-2 py-1 bg-pink-900/30 text-xs rounded-full text-pink-300">Soft Vocals</span>
-                  <span className="px-2 py-1 bg-pink-900/30 text-xs rounded-full text-pink-300">Emotional Lyrics</span>
-                  <span className="px-2 py-1 bg-pink-900/30 text-xs rounded-full text-pink-300">Catchy Chorus</span>
-                  <span className="px-2 py-1 bg-pink-900/30 text-xs rounded-full text-pink-300">Piano Melody</span>
-                </div>
-              </div>
-            </div>
-            <div className="ml-4 flex-shrink-0">
-              <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* New AIVA Integration Banner */}
+      <div className="mt-8 mb-8 rounded-xl border border-cyan-800/30 bg-gradient-to-r from-cyan-900/20 to-black/60 p-6">
+        <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-cyan-500/20">
+              <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path
-                  d="M40 10C23.4315 10 10 23.4315 10 40C10 56.5685 23.4315 70 40 70C56.5685 70 70 56.5685 70 40C70 23.4315 56.5685 10 40 10ZM40 65C26.1929 65 15 53.8071 15 40C15 26.1929 26.1929 15 40 15C53.8071 15 65 26.1929 65 40C65 53.8071 53.8071 65 40 65Z"
-                  fill="#ff6b9d"
-                />
-                <path
-                  d="M40 20C29.0543 20 20 29.0543 20 40C20 50.9457 29.0543 60 40 60C50.9457 60 60 50.9457 60 40C60 29.0543 50.9457 20 40 20ZM40 55C31.7157 55 25 48.2843 25 40C25 31.7157 31.7157 25 40 25C48.2843 25 55 31.7157 55 40C55 48.2843 48.2843 55 40 55Z"
-                  fill="#ff4d8b"
-                />
-                <path
-                  d="M40 30C34.4772 30 30 34.4772 30 40C30 45.5228 34.4772 50 40 50C45.5228 50 50 45.5228 50 40C50 34.4772 45.5228 30 40 30ZM40 45C37.2386 45 35 42.7614 35 40C35 37.2386 37.2386 35 40 35C42.7614 35 45 37.2386 45 40C45 42.7614 42.7614 45 40 45Z"
-                  fill="#ff3385"
-                />
-                <path
-                  d="M65 25C65 25 55 15 40 15C25 15 15 25 15 25L40 50L65 25Z"
-                  fill="#ff3385"
-                  fillOpacity="0.5"
+                  d="M16 4L19.2 10.5L26 11.5L21 16.5L22.4 23.5L16 20L9.6 23.5L11 16.5L6 11.5L12.8 10.5L16 4Z"
+                  fill="#00c0c0"
                 />
               </svg>
             </div>
+            <div>
+              <h2 className="text-xl font-bold text-white">AIVA AI Music Generation</h2>
+              <p className="text-zinc-400">Enhance your music creation with AIVA's professional AI music generation</p>
+            </div>
           </div>
+          <Button
+            className="bg-gradient-to-r from-cyan-500 to-blue-500 text-black hover:from-cyan-600 hover:to-blue-600"
+            onClick={handleAivaIntegration}
+          >
+            Integrate AIVA
+          </Button>
         </div>
       </div>
 
       <div className="mt-12">
         <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold">Premium EDM Playlists</h2>
-            <div className="flex items-center mt-1">
-              <span className="text-cyan-400 text-sm font-medium mr-2">✨ Enhanced Audio Quality</span>
-              <span className="px-2 py-0.5 bg-cyan-900/30 text-xs rounded-full text-cyan-300">Studio-Grade Mastering</span>
-            </div>
-          </div>
+          <h2 className="text-2xl font-bold">EDM Playlists</h2>
           <div className="flex items-center gap-3">
             <Button variant="outline" size="sm" className="flex items-center gap-1 text-cyan-400 border-cyan-800/50">
               <Shuffle className="h-3 w-3" />
               <span>Shuffle</span>
             </Button>
-            <Link href="/premium-remix">
-              <Button variant="link" className="text-cyan-400">
-                View all
-              </Button>
-            </Link>
+            <Button variant="link" className="text-cyan-400">
+              View all
+            </Button>
           </div>
         </div>
-        <p className="mb-6 text-zinc-400">Explore our collection of premium EDM playlists with enhanced bass and crystal-clear highs</p>
+        <p className="mb-6 text-zinc-400">Explore our collection of EDM playlists</p>
 
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
           {edmPlaylists.map((playlist) => (
@@ -382,18 +631,42 @@ export default function HomePage() {
                   </div>
                 </Link>
                 <div className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 transition-opacity group-hover:opacity-100">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-12 w-12 rounded-full bg-cyan-500 text-black hover:bg-cyan-400"
-                    onClick={(e) => {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      togglePlay(playlist.id)
-                    }}
-                  >
-                    {playingTrackId === playlist.id ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6 ml-1" />}
-                  </Button>
+                  {audioError[playlist.id] && !isRetrying[playlist.id] ? (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-12 w-12 rounded-full bg-amber-500 text-black hover:bg-amber-400"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        retryLoadTrack(playlist.id)
+                      }}
+                    >
+                      <RefreshCw className="h-6 w-6" />
+                    </Button>
+                  ) : isRetrying[playlist.id] ? (
+                    <div className="h-12 w-12 rounded-full bg-cyan-500/80 flex items-center justify-center">
+                      <div className="h-6 w-6 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                  ) : (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-12 w-12 rounded-full bg-cyan-500 text-black hover:bg-cyan-400"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        togglePlay(playlist.id)
+                      }}
+                      disabled={!audioLoaded[playlist.id]}
+                    >
+                      {playingTrackId === playlist.id ? (
+                        <Pause className="h-6 w-6" />
+                      ) : (
+                        <Play className="h-6 w-6 ml-1" />
+                      )}
+                    </Button>
+                  )}
                   <div className="absolute bottom-2 right-2">
                     <Button
                       size="icon"
@@ -402,7 +675,7 @@ export default function HomePage() {
                       onClick={(e) => {
                         e.preventDefault()
                         e.stopPropagation()
-                        downloadTrack(playlist.audioUrl, playlist.title)
+                        downloadTrack(playlist.id, playlist.title)
                       }}
                     >
                       <Download className="h-4 w-4" />
@@ -433,6 +706,38 @@ export default function HomePage() {
                     </div>
                   </div>
                 )}
+
+                {/* Loading indicator */}
+                {!audioLoaded[playlist.id] && !audioError[playlist.id] && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+                    <div className="text-center">
+                      <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-cyan-400 border-r-transparent align-[-0.125em]"></div>
+                      <p className="mt-2 text-sm text-cyan-400">Loading audio...</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Error indicator */}
+                {audioError[playlist.id] && !isRetrying[playlist.id] && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+                    <div className="text-center px-2">
+                      <p className="text-amber-400 mb-1">Audio failed to load</p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-amber-500 text-amber-400 hover:bg-amber-500/20"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          retryLoadTrack(playlist.id)
+                        }}
+                      >
+                        <RefreshCw className="mr-1 h-3 w-3" />
+                        Retry
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="p-3">
                 <Link href={`/playlist/${playlist.id}`}>
@@ -445,15 +750,6 @@ export default function HomePage() {
                   {playingTrackId === playlist.id && <span className="ml-auto text-xs text-cyan-400">Playing</span>}
                 </div>
               </div>
-
-              {/* Hidden audio element for this playlist */}
-              <audio
-                id={`audio-${playlist.id}`}
-                src={playlist.audioUrl}
-                className="hidden"
-                preload="auto"
-                onEnded={() => setPlayingTrackId(null)}
-              />
             </div>
           ))}
         </div>
@@ -461,23 +757,8 @@ export default function HomePage() {
 
       {/* EDM AI Playlist Section */}
       <div className="mt-16 border-t border-zinc-800 pt-8">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-3xl font-bold">🎧 Premium EDM AI Playlist</h2>
-            <div className="flex items-center mt-2">
-              <span className="text-cyan-400 text-sm font-medium mr-2">✨ Professional Mastering</span>
-              <span className="px-2 py-0.5 bg-cyan-900/30 text-xs rounded-full text-cyan-300 mr-2">Deep Bass</span>
-              <span className="px-2 py-0.5 bg-cyan-900/30 text-xs rounded-full text-cyan-300 mr-2">Punchy Mids</span>
-              <span className="px-2 py-0.5 bg-cyan-900/30 text-xs rounded-full text-cyan-300">Crystal Highs</span>
-            </div>
-          </div>
-          <Link href="/premium-remix">
-            <Button className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700">
-              <span className="mr-1">✨</span> Premium Studio
-            </Button>
-          </Link>
-        </div>
-        <p className="text-zinc-400 mb-8">AI-generated EDM tracks with enhanced bass boost, sidechain compression, and club-quality sound</p>
+        <h2 className="text-3xl font-bold mb-6">🎧 EDM AI Playlist</h2>
+        <p className="text-zinc-400 mb-8">AI-generated EDM tracks with deep bass and futuristic vibes</p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {aiEdmTracks.map((track) => (
@@ -501,28 +782,78 @@ export default function HomePage() {
                 >
                   <Heart className="h-4 w-4" />
                 </Button>
+
+                {/* Loading indicator */}
+                {!audioLoaded[track.id] && !audioError[track.id] && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+                    <div className="text-center">
+                      <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-cyan-400 border-r-transparent align-[-0.125em]"></div>
+                      <p className="mt-2 text-sm text-cyan-400">Loading audio...</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Error indicator */}
+                {audioError[track.id] && !isRetrying[track.id] && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+                    <div className="text-center px-4">
+                      <p className="text-amber-400 mb-2">Audio failed to load</p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-amber-500 text-amber-400 hover:bg-amber-500/20"
+                        onClick={() => retryLoadTrack(track.id)}
+                      >
+                        <RefreshCw className="mr-1 h-3 w-3" />
+                        Retry
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="p-4">
                 <h3 className="text-lg font-semibold text-white mb-1">{track.title}</h3>
                 <p className="text-cyan-400 text-sm mb-4">{track.artist}</p>
 
-                <audio
-                  id={`audio-${track.id}`}
-                  className="w-full"
-                  controls
-                  src={track.audioUrl}
-                  preload="auto"
-                  onPlay={() => setPlayingTrackId(track.id)}
-                  onPause={() => setPlayingTrackId(null)}
-                >
-                  Your browser does not support the audio element.
-                </audio>
+                {audioError[track.id] && !isRetrying[track.id] ? (
+                  <div className="w-full p-3 border border-amber-500/30 rounded-md bg-amber-500/10 text-center">
+                    <p className="text-amber-400 text-sm mb-2">Audio could not be loaded</p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-amber-500 text-amber-400 hover:bg-amber-500/20"
+                      onClick={() => retryLoadTrack(track.id)}
+                    >
+                      <RefreshCw className="mr-1 h-3 w-3" />
+                      Retry Loading
+                    </Button>
+                  </div>
+                ) : isRetrying[track.id] ? (
+                  <div className="w-full p-4 border border-cyan-500/30 rounded-md bg-cyan-500/10 text-center">
+                    <div className="inline-block h-6 w-6 animate-spin rounded-full border-4 border-solid border-cyan-400 border-r-transparent align-[-0.125em] mb-2"></div>
+                    <p className="text-cyan-400 text-sm">Reloading audio...</p>
+                  </div>
+                ) : (
+                  <audio
+                    id={`audio-${track.id}`}
+                    className="w-full"
+                    controls
+                    src={getAudioUrl(track.id)}
+                    preload="auto"
+                    onPlay={() => setPlayingTrackId(track.id)}
+                    onPause={() => setPlayingTrackId(null)}
+                  >
+                    Your browser does not support the audio element.
+                  </audio>
+                )}
+
                 <div className="mt-3 flex justify-end">
                   <Button
                     size="sm"
                     className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-cyan-600 text-white hover:bg-cyan-500 transition-colors"
-                    onClick={() => downloadTrack(track.audioUrl, track.title)}
+                    onClick={() => downloadTrack(track.id, track.title)}
+                    disabled={audioError[track.id] && !isRetrying[track.id]}
                   >
                     <Download className="h-3 w-3" />
                     <span>Download</span>

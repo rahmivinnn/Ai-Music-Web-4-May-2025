@@ -24,7 +24,7 @@
     "@radix-ui/react-menubar": "1.1.4",
     "@radix-ui/react-navigation-menu": "1.2.3",
     "@radix-ui/react-popover": "1.1.4",
-    "@radix-ui/react-progress": "1.1.1",
+    "@radix-ui/react-progress": "latest",
     "@radix-ui/react-radio-group": "1.2.2",
     "@radix-ui/react-scroll-area": "1.2.2",
     "@radix-ui/react-select": "2.1.4",
@@ -32,8 +32,8 @@
     "@radix-ui/react-slider": "1.2.2",
     "@radix-ui/react-slot": "1.1.1",
     "@radix-ui/react-switch": "1.1.2",
-    "@radix-ui/react-tabs": "1.1.2",
-    "@radix-ui/react-toast": "1.2.4",
+    "@radix-ui/react-tabs": "latest",
+    "@radix-ui/react-toast": "latest",
     "@radix-ui/react-toggle": "1.1.1",
     "@radix-ui/react-toggle-group": "1.1.1",
     "@radix-ui/react-tooltip": "1.1.6",
@@ -50,6 +50,7 @@
     "react": "^19",
     "react-day-picker": "8.10.1",
     "react-dom": "^19",
+    "react-dropzone": "latest",
     "react-hook-form": "^7.54.1",
     "react-resizable-panels": "^2.1.7",
     "recharts": "2.15.0",
@@ -57,8 +58,7 @@
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.6",
-    "zod": "^3.24.1",
-    "react-dropzone": "latest"
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/node": "^22",

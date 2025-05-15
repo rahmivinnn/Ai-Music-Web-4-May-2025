@@ -2,30 +2,9 @@
 
 import { useEffect, useRef } from "react"
 
-// Add roundRect method to CanvasRenderingContext2D interface
-declare global {
-  interface CanvasRenderingContext2D {
-    roundRect?: (x: number, y: number, width: number, height: number, radius: number) => void;
-  }
-}
-
-interface AudioVisualizerProps {
-  isPlaying: boolean;
-  audioFile: { url: string } | null;
-  analyserNode: AnalyserNode | null;
-  currentTime: number;
-  duration: number;
-}
-
-export function AudioVisualizer({
-  isPlaying,
-  audioFile,
-  analyserNode,
-  currentTime,
-  duration
-}: AudioVisualizerProps) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const animationRef = useRef<number | null>(null)
+export function AudioVisualizer({ isPlaying, audioFile, analyserNode, currentTime, duration }) {
+  const canvasRef = useRef(null)
+  const animationRef = useRef(null)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -90,14 +69,7 @@ export function AudioVisualizer({
             // Draw rounded bars for a more polished look
             const barY = height / 2 - barHeight / 2
             ctx.beginPath()
-
-            // Use roundRect if available, otherwise fallback to regular rect
-            if (ctx.roundRect) {
-              ctx.roundRect(x, barY, barWidth, barHeight, 2)
-            } else {
-              ctx.rect(x, barY, barWidth, barHeight)
-            }
-
+            ctx.roundRect(x, barY, barWidth, barHeight, 2)
             ctx.fill()
 
             x += barWidth + 1
@@ -113,11 +85,7 @@ export function AudioVisualizer({
             // Use cyan color palette
             ctx.fillStyle = i % 6 === 0 ? "#00e0e0" : "#00a0a0"
             ctx.beginPath()
-            if (ctx.roundRect) {
-              ctx.roundRect(i, height / 2 - barHeight / 2, 2, barHeight, 1)
-            } else {
-              ctx.rect(i, height / 2 - barHeight / 2, 2, barHeight)
-            }
+            ctx.roundRect(i, height / 2 - barHeight / 2, 2, barHeight, 1)
             ctx.fill()
           }
         }
@@ -128,11 +96,7 @@ export function AudioVisualizer({
           const barHeight = Math.abs(h) + 5
           ctx.fillStyle = "#52525b"
           ctx.beginPath()
-          if (ctx.roundRect) {
-            ctx.roundRect(i, height / 2 - barHeight / 2, 2, barHeight, 1)
-          } else {
-            ctx.rect(i, height / 2 - barHeight / 2, 2, barHeight)
-          }
+          ctx.roundRect(i, height / 2 - barHeight / 2, 2, barHeight, 1)
           ctx.fill()
         }
       }
@@ -149,7 +113,7 @@ export function AudioVisualizer({
     }
   }, [isPlaying, audioFile, analyserNode, currentTime, duration])
 
-  const formatTime = (seconds: number) => {
+  const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60)
     const secs = Math.floor(seconds % 60)
     return `${mins}:${secs.toString().padStart(2, "0")}`

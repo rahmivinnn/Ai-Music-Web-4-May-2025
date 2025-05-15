@@ -1,27 +1,63 @@
 import { NextResponse } from "next/server"
 
+// API key yang diberikan
+const API_KEY = "sk_ef1c339bb362fd09aedad8f2cf572648733877d2d8cf6c85"
+const API_URL = "https://api.elevenlabs.io/v1/text-to-speech"
+
 export async function POST(request) {
   try {
-    const { prompt, voice = "alloy", model = "tts-1" } = await request.json()
+    const { prompt, voice = "21m00Tcm4TlvDq8ikWAM", model = "eleven_monolingual_v1" } = await request.json()
 
     if (!prompt) {
       return NextResponse.json({ error: "Prompt is required" }, { status: 400 })
     }
 
-    console.log(`[DUMMY API] Text-to-speech requested: "${prompt}", voice: ${voice}, model: ${model}`)
+    console.log(`[API] Text-to-speech requested: "${prompt}", voice: ${voice}, model: ${model}`)
 
-    // Simulate processing time
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    // Konfigurasi untuk ElevenLabs API
+    const voiceSettings = {
+      stability: 0.5,
+      similarity_boost: 0.75,
+    }
 
-    // Instead of generating real audio, we'll return a redirect to a sample audio file
+    // Membuat request ke ElevenLabs API
+    const response = await fetch(`${API_URL}/${voice}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "xi-api-key": API_KEY,
+      },
+      body: JSON.stringify({
+        text: prompt,
+        model_id: model,
+        voice_settings: voiceSettings,
+      }),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      console.error("ElevenLabs API error:", errorData)
+      return NextResponse.json(
+        { error: `ElevenLabs API error: ${response.status} ${response.statusText}` },
+        { status: response.status },
+      )
+    }
+
+    // Mendapatkan audio sebagai ArrayBuffer
+    const audioBuffer = await response.arrayBuffer()
+
+    // Mengkonversi ArrayBuffer ke Base64 untuk dikirim ke client
+    const audioBase64 = Buffer.from(audioBuffer).toString("base64")
+
     return NextResponse.json({
       success: true,
-      message: "This is a dummy implementation. In a real implementation, this would return audio data.",
-      audioUrl: "https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3",
-      isDummy: true,
+      audioData: audioBase64,
+      contentType: "audio/mpeg",
+      voice: voice,
+      model: model,
     })
   } catch (error) {
-    console.error("Error in dummy text-to-speech API:", error)
+    console.error("Error in text-to-speech API:", error)
     return NextResponse.json({ error: error.message || "Failed to generate speech" }, { status: 500 })
   }
 }

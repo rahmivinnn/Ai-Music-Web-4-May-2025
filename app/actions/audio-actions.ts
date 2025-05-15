@@ -1,392 +1,281 @@
 "use server"
 
-import { generateDetailedPrompt, getEdmFallbackTracks } from "@/lib/remix-utils"
-import { premiumEdmPresets } from "@/lib/premium-audio-processor"
+import { generateBackgroundMusic, generateRemix, generateSpeechWithMusic } from "@/lib/riffusion-service"
 
-// Dummy implementation that doesn't require an actual OpenAI API key
-export async function generateAudio({ prompt, voice = "alloy", model = "tts-1", style = "neutral" }) {
-  try {
-    console.log(`[DUMMY] Generating audio with prompt: "${prompt}", voice: ${voice}, model: ${model}, style: ${style}`)
+// Riffusion API key
+const RIFFUSION_API_KEY = "sk-ebfcc1a7d768b55f533eb6194e07f29b8c257373a7bdfcf634f937a0a5bba274"
 
-    // Simulate processing time
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-
-    // Instead of calling OpenAI, we'll use a sample audio file
-    // In a real implementation, we would generate this file using the OpenAI API
-
-    // For demo purposes, we'll use different sample files based on the selected voice and style
-    let sampleFile
-
-    // First determine the base voice type
-    let voiceType
-    switch (voice) {
-      case "echo":
-      case "onyx":
-        voiceType = "male"
-        break
-      case "nova":
-      case "shimmer":
-        voiceType = "female"
-        break
-      case "fable":
-        voiceType = "warm"
-        break
-      case "alloy":
-      default:
-        voiceType = "neutral"
-    }
-
-    // Then combine with style for more variety
-    switch (style) {
-      case "cheerful":
-        sampleFile = `/samples/${voiceType}-cheerful.mp3`
-        break
-      case "sad":
-        sampleFile = `/samples/${voiceType}-sad.mp3`
-        break
-      case "professional":
-        sampleFile = `/samples/${voiceType}-professional.mp3`
-        break
-      case "excited":
-        sampleFile = `/samples/${voiceType}-excited.mp3`
-        break
-      case "calm":
-        sampleFile = `/samples/${voiceType}-calm.mp3`
-        break
-      case "neutral":
-      default:
-        sampleFile = `/samples/${voiceType}-neutral.mp3`
-    }
-
-    // Use HD quality samples if HD model is selected
-    if (model === "tts-1-hd") {
-      sampleFile = sampleFile.replace(".mp3", "-hd.mp3")
-    }
-
-    // Fallback to standard samples if HD isn't available
-    const sampleUrl = `/samples/${voiceType}-${style === "neutral" ? "" : style + "-"}sample.mp3`
-
-    // Provide multiple fallback URLs for better compatibility
-    const fallbackUrls = [
-      sampleUrl,
-      // External fallbacks that are known to work
-      "https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3",
-      "https://assets.mixkit.co/music/preview/mixkit-dreaming-big-31.mp3",
-      "https://assets.mixkit.co/music/preview/mixkit-pop-01-678.mp3"
-    ]
-
-    console.log(`[DUMMY] Audio generation complete. Using sample file: ${sampleUrl}`)
-
-    return {
-      audioUrl: sampleUrl,
-      fallbackUrls: fallbackUrls,
-      success: true,
-      isDummy: true,
-      prompt: prompt,
-      voice: voice,
-      model: model,
-      style: style,
-    }
-  } catch (error) {
-    console.error("Error in dummy audio generation:", error)
-    return {
-      error: error.message || "Failed to generate audio",
-    }
-  }
+// Mapping for sample fallback based on voice and style
+const SAMPLE_MAPPING = {
+  male: {
+    neutral: "/samples/male-neutral-sample.mp3",
+    cheerful: "/samples/male-cheerful-sample.mp3",
+    sad: "/samples/male-sad-sample.mp3",
+    professional: "/samples/male-professional-sample.mp3",
+    excited: "/samples/male-excited-sample.mp3",
+    calm: "/samples/male-calm-sample.mp3",
+  },
+  female: {
+    neutral: "/samples/female-neutral-sample.mp3",
+    cheerful: "/samples/female-cheerful-sample.mp3",
+    sad: "/samples/female-sad-sample.mp3",
+    professional: "/samples/female-professional-sample.mp3",
+    excited: "/samples/female-excited-sample.mp3",
+    calm: "/samples/female-calm-sample.mp3",
+  },
+  robot: {
+    neutral: "/samples/neutral-neutral-sample.mp3",
+    cheerful: "/samples/neutral-cheerful-sample.mp3",
+    sad: "/samples/neutral-sad-sample.mp3",
+    professional: "/samples/neutral-professional-sample.mp3",
+    excited: "/samples/neutral-excited-sample.mp3",
+    calm: "/samples/neutral-calm-sample.mp3",
+  },
+  deep: {
+    neutral: "/samples/deep-neutral-sample.mp3",
+    cheerful: "/samples/deep-cheerful-sample.mp3",
+    sad: "/samples/deep-sad-sample.mp3",
+    professional: "/samples/deep-professional-sample.mp3",
+    excited: "/samples/deep-excited-sample.mp3",
+    calm: "/samples/deep-calm-sample.mp3",
+  },
+  neutral: {
+    neutral: "/samples/neutral-neutral-sample.mp3",
+    cheerful: "/samples/neutral-cheerful-sample.mp3",
+    sad: "/samples/neutral-sad-sample.mp3",
+    professional: "/samples/neutral-professional-sample.mp3",
+    excited: "/samples/neutral-excited-sample.mp3",
+    calm: "/samples/neutral-calm-sample.mp3",
+  },
+  warm: {
+    neutral: "/samples/warm-neutral-sample.mp3",
+    cheerful: "/samples/warm-cheerful-sample.mp3",
+    sad: "/samples/warm-sad-sample.mp3",
+    professional: "/samples/warm-professional-sample.mp3",
+    excited: "/samples/warm-excited-sample.mp3",
+    calm: "/samples/warm-calm-sample.mp3",
+  },
 }
 
-// For more advanced music generation, we could implement a function like this:
-export async function generateMusic({ prompt, genre, bpm, duration }) {
-  // This would connect to a music generation API like Mubert, Soundraw, or a custom model
-  // For now, we'll return a dummy response
+// Music fallback samples
+const MUSIC_FALLBACK = {
+  neutral: "/samples/music-neutral.mp3",
+  cheerful: "/samples/music-cheerful.mp3",
+  sad: "/samples/music-sad.mp3",
+  professional: "/samples/music-professional.mp3",
+  excited: "/samples/music-excited.mp3",
+  calm: "/samples/music-calm.mp3",
+}
 
-  console.log(`[DUMMY] Music generation requested: ${prompt}, genre: ${genre}, bpm: ${bpm}`)
-
-  // Simulate processing time
-  await new Promise((resolve) => setTimeout(resolve, 2000))
-
-  // Select a sample based on genre and BPM
-  let sampleUrl
-  let fallbackUrls = []
-
-  // Add all potential URLs to the fallback list
-  const allSamples = {
-    rock: [
-      "https://assets.mixkit.co/music/preview/mixkit-driving-ambition-32.mp3",
-      "https://assets.mixkit.co/music/preview/mixkit-epical-drums-01-676.mp3"
-    ],
-    hiphop: [
-      "https://assets.mixkit.co/music/preview/mixkit-hip-hop-02-621.mp3",
-      "https://assets.mixkit.co/music/preview/mixkit-urban-fashion-171.mp3"
-    ],
-    sad: [
-      "https://assets.mixkit.co/music/preview/mixkit-sad-melancholic-classical-strings-2848.mp3",
-      "https://assets.mixkit.co/music/preview/mixkit-piano-reflections-22.mp3"
-    ],
-    classic: [
-      "https://assets.mixkit.co/music/preview/mixkit-serene-view-443.mp3",
-      "https://assets.mixkit.co/music/preview/mixkit-just-kidding-11.mp3"
-    ],
-    electronic: {
-      fast: [
-        "https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3",
-        "https://assets.mixkit.co/music/preview/mixkit-c-major-house-657.mp3"
-      ],
-      medium: [
-        "https://assets.mixkit.co/music/preview/mixkit-house-party-hard-beat-11.mp3",
-        "https://assets.mixkit.co/music/preview/mixkit-a-very-happy-christmas-51.mp3"
-      ],
-      slow: [
-        "https://assets.mixkit.co/music/preview/mixkit-deep-urban-623.mp3",
-        "https://assets.mixkit.co/music/preview/mixkit-trip-hop-vibes-149.mp3"
-      ]
-    },
-    ambient: [
-      "https://assets.mixkit.co/music/preview/mixkit-dreaming-big-31.mp3",
-      "https://assets.mixkit.co/music/preview/mixkit-serene-view-443.mp3"
-    ],
-    jazz: [
-      "https://assets.mixkit.co/music/preview/mixkit-jazz-bar-background-164.mp3",
-      "https://assets.mixkit.co/music/preview/mixkit-smooth-lounge-112.mp3"
-    ],
-    pop: [
-      "https://assets.mixkit.co/music/preview/mixkit-pop-01-678.mp3",
-      "https://assets.mixkit.co/music/preview/mixkit-a-very-happy-christmas-51.mp3"
-    ]
-  }
-
-  // Add all samples to fallback list for maximum compatibility
-  Object.values(allSamples).forEach(category => {
-    if (Array.isArray(category)) {
-      fallbackUrls = [...fallbackUrls, ...category]
-    } else if (typeof category === 'object') {
-      Object.values(category).forEach(subCategory => {
-        if (Array.isArray(subCategory)) {
-          fallbackUrls = [...fallbackUrls, ...subCategory]
-        }
-      })
-    }
-  })
-
-  // Select primary URL based on genre and BPM
-  switch (genre?.toLowerCase()) {
-    case "rock":
-      sampleUrl = allSamples.rock[0]
-      break
-    case "hiphop":
-      sampleUrl = allSamples.hiphop[0]
-      break
-    case "sad":
-      sampleUrl = allSamples.sad[0]
-      break
-    case "classic":
-      sampleUrl = allSamples.classic[0]
-      break
-    case "electronic":
-      if (bpm && bpm > 140) {
-        sampleUrl = allSamples.electronic.fast[0]
-      } else if (bpm && bpm > 100) {
-        sampleUrl = allSamples.electronic.medium[0]
-      } else {
-        sampleUrl = allSamples.electronic.slow[0]
-      }
-      break
-    case "ambient":
-      sampleUrl = allSamples.ambient[0]
-      break
-    case "jazz":
-      sampleUrl = allSamples.jazz[0]
-      break
-    case "pop":
-      sampleUrl = allSamples.pop[0]
-      break
-    default:
-      // Default to pop for unknown genres
-      sampleUrl = allSamples.pop[0]
-  }
-
-  // Verify the URL is accessible with a HEAD request
+/**
+ * Generate audio using Riffusion API
+ */
+export async function generateAudio({ prompt, voice = "neutral", style = "neutral" }) {
   try {
-    const response = await fetch(sampleUrl, { method: 'HEAD' })
-    if (!response.ok) {
-      console.warn(`Primary audio URL ${sampleUrl} is not accessible, using fallback`)
-      // Use the first fallback URL
-      sampleUrl = fallbackUrls[0]
+    console.log(`[Server] Generating audio with Riffusion: "${prompt}", voice: ${voice}, style: ${style}`)
+
+    // Get fallback sample paths
+    const fallbackVoiceSample = SAMPLE_MAPPING[voice]?.[style] || "/samples/sample-neutral.mp3"
+    const fallbackMusicSample = MUSIC_FALLBACK[style] || "/samples/music-neutral.mp3"
+
+    try {
+      // Generate speech and music using Riffusion
+      const { speechUrl, musicUrl } = await generateSpeechWithMusic(prompt, voice, style)
+
+      return {
+        audioUrl: speechUrl,
+        musicUrl: musicUrl,
+        fallbackUrl: fallbackVoiceSample,
+        fallbackMusicUrl: fallbackMusicSample,
+        success: true,
+        prompt,
+        voice,
+        style,
+        isRiffusion: true,
+      }
+    } catch (error) {
+      console.error("Error in Riffusion API:", error)
+
+      // Return fallback samples if API fails
+      return {
+        audioUrl: null,
+        musicUrl: null,
+        fallbackUrl: fallbackVoiceSample,
+        fallbackMusicUrl: fallbackMusicSample,
+        success: false,
+        error: error.message || "Failed to generate audio with Riffusion API",
+        useFallback: true,
+      }
     }
   } catch (error) {
-    console.error("Error checking audio URL:", error)
-    // Use the first fallback URL
-    sampleUrl = fallbackUrls[0]
-  }
-
-  return {
-    audioUrl: sampleUrl,
-    fallbackUrls: fallbackUrls,
-    success: true,
-    isDummy: true,
-    message: "This is a dummy implementation using sample audio files.",
-    genre: genre,
-    bpm: bpm,
+    console.error("Error in audio generation:", error)
+    return {
+      audioUrl: null,
+      musicUrl: null,
+      fallbackUrl: "/samples/sample-neutral.mp3",
+      fallbackMusicUrl: "/samples/music-neutral.mp3",
+      success: false,
+      error: error.message || "Failed to generate audio",
+      useFallback: true,
+    }
   }
 }
 
 /**
- * Remix an audio file into an EDM track with professional quality
- * @param params Remix parameters including file, prompt, style, quality, bpm, key, and preset
- * @returns RemixResult with audio URL and metadata
+ * Generate music using Riffusion API
  */
-export async function remixAudio({
-  file,
-  trackId,
-  prompt,
-  style = "progressive_house",
-  quality = "studio",
-  bpm = 128,
-  key = "C Minor",
-  preset
-}) {
+export async function generateMusic({ prompt, genre, bpm, duration = 30 }) {
+  console.log(`[Server] Music generation requested with Riffusion: "${prompt}", genre: ${genre}, bpm: ${bpm}`)
+
+  // Fallback samples in case API fails
+  const fallbackSamples = {
+    electronic: "/samples/music-neutral.mp3",
+    house: "/samples/music-cheerful.mp3",
+    dubstep: "/samples/music-excited.mp3",
+    trance: "/samples/music-calm.mp3",
+    hiphop: "/samples/music-professional.mp3",
+    rock: "/samples/music-sad.mp3",
+    ambient: "/samples/music-calm.mp3",
+    jazz: "/samples/music-professional.mp3",
+  }
+
+  // Fallback URL based on genre
+  const fallbackUrl = fallbackSamples[genre] || "/samples/music-neutral.mp3"
+
   try {
-    console.log(`[PREMIUM] Remixing audio with style: ${style}, BPM: ${bpm}, key: ${key}`)
-    console.log(`[PREMIUM] Prompt: "${prompt}"`)
+    // Enhance prompt with genre and BPM information for better results
+    const enhancedPrompt = `${genre} music with ${bpm} BPM, ${prompt}, high quality audio`
 
-    // Determine the preset to use
-    let presetKey = preset
+    // Generate music using Riffusion
+    const musicUrl = await generateRemix(enhancedPrompt)
 
-    // If no preset is specified, try to determine from style
-    if (!presetKey) {
-      // Map style to preset
-      const styleToPreset = {
-        'progressive_house': 'bass_boost',
-        'future_bass': 'future_bass',
-        'bass_house': 'bass_boost',
-        'tropical_house': 'house_party',
-        'dubstep': 'dubstep_wobble',
-        'techno': 'techno_beat',
-        'trance': 'trance_vibe',
-        'house': 'house_party'
-      }
-
-      const normalizedStyle = style.toLowerCase().replace(' ', '_')
-      presetKey = styleToPreset[normalizedStyle] || 'bass_boost'
-    }
-
-    // Get the preset parameters
-    const presetParams = premiumEdmPresets[presetKey] || premiumEdmPresets.bass_boost
-
-    // Generate a detailed prompt for the remix
-    const detailedPrompt = generateDetailedPrompt(
-      prompt || `Apply ${presetParams.name} preset with professional mastering`,
-      style,
+    return {
+      audioUrl: musicUrl,
+      fallbackUrl,
+      success: true,
+      genre,
       bpm,
-      key
-    )
-    console.log(`[PREMIUM] Generated detailed prompt: ${detailedPrompt.substring(0, 100)}...`)
-    console.log(`[PREMIUM] Using preset: ${presetParams.name}`)
-
-    // Simulate processing time (longer for "studio" quality)
-    const processingTime = quality === "studio" ? 5000 : 3000
-    await new Promise((resolve) => setTimeout(resolve, processingTime))
-
-    // Premium EDM samples with higher quality and more variety
-    const premiumEdmSamples = {
-      'bass_boost': [
-        "https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3",
-        "https://assets.mixkit.co/music/preview/mixkit-c-major-house-657.mp3"
-      ],
-      'dubstep_wobble': [
-        "https://assets.mixkit.co/music/preview/mixkit-hip-hop-02-621.mp3",
-        "https://assets.mixkit.co/music/preview/mixkit-deep-urban-623.mp3"
-      ],
-      'techno_beat': [
-        "https://assets.mixkit.co/music/preview/mixkit-driving-ambition-32.mp3",
-        "https://assets.mixkit.co/music/preview/mixkit-epical-drums-01-676.mp3"
-      ],
-      'trance_vibe': [
-        "https://assets.mixkit.co/music/preview/mixkit-serene-view-443.mp3",
-        "https://assets.mixkit.co/music/preview/mixkit-just-kidding-11.mp3"
-      ],
-      'house_party': [
-        "https://assets.mixkit.co/music/preview/mixkit-house-party-hard-beat-11.mp3",
-        "https://assets.mixkit.co/music/preview/mixkit-a-very-happy-christmas-51.mp3"
-      ],
-      'future_bass': [
-        "https://assets.mixkit.co/music/preview/mixkit-a-very-happy-christmas-51.mp3",
-        "https://assets.mixkit.co/music/preview/mixkit-driving-ambition-32.mp3"
-      ]
+      isRiffusion: true,
     }
+  } catch (error) {
+    console.error("Error in Riffusion music generation:", error)
 
-    // Predefined tracks with specific samples
-    const predefinedTracks = {
-      'edm_bass_drop': "https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3",
-      'dubstep_wobble': "https://assets.mixkit.co/music/preview/mixkit-hip-hop-02-621.mp3",
-      'techno_beat': "https://assets.mixkit.co/music/preview/mixkit-driving-ambition-32.mp3",
-      'trance_vibe': "https://assets.mixkit.co/music/preview/mixkit-serene-view-443.mp3",
-      'house_party': "https://assets.mixkit.co/music/preview/mixkit-house-party-hard-beat-11.mp3"
+    // Fall back to local samples if Riffusion API fails
+    console.log(`Falling back to local sample for genre: ${genre}`)
+
+    return {
+      audioUrl: null,
+      fallbackUrl,
+      success: false,
+      error: error.message || "Failed to generate music with Riffusion",
+      useFallback: true,
     }
+  }
+}
 
-    // Determine the primary URL based on input
-    let primaryUrl
+/**
+ * Generate audio with background music
+ */
+export async function generateAudioWithBackgroundMusic(text: string, voice: string, emotion: string) {
+  try {
+    console.log(`Generating audio with text: ${text}, voice: ${voice}, emotion: ${emotion}`)
 
-    // If a trackId is provided, use the predefined track
-    if (trackId && predefinedTracks[trackId]) {
-      primaryUrl = predefinedTracks[trackId]
-    }
-    // Otherwise, use the preset samples
-    else {
-      const presetSamples = premiumEdmSamples[presetKey] || premiumEdmSamples.bass_boost
-      primaryUrl = presetSamples[0]
-    }
+    // Get fallback sample paths
+    const fallbackVoiceSample = SAMPLE_MAPPING[voice]?.[emotion] || "/samples/sample-neutral.mp3"
+    const fallbackMusicSample = MUSIC_FALLBACK[emotion] || "/samples/music-neutral.mp3"
 
-    // Get fallback URLs
-    const fallbackUrls = getEdmFallbackTracks(style, bpm)
-
-    // Verify the URL is accessible with a HEAD request
-    let finalUrl = primaryUrl
     try {
-      const response = await fetch(primaryUrl, { method: 'HEAD' })
-      if (!response.ok) {
-        console.warn(`Primary audio URL ${primaryUrl} is not accessible, using fallback`)
-        finalUrl = fallbackUrls[0]
+      // Generate speech and music using Riffusion
+      const { speechUrl, musicUrl } = await generateSpeechWithMusic(text, voice, emotion)
+
+      return {
+        voiceAudioUrl: speechUrl,
+        musicUrl: musicUrl,
+        fallbackVoiceUrl: fallbackVoiceSample,
+        fallbackMusicUrl: fallbackMusicSample,
+        success: true,
+        message: "Audio generated successfully with Riffusion",
       }
     } catch (error) {
-      console.error("Error checking audio URL:", error)
-      finalUrl = fallbackUrls[0]
-    }
+      console.error("Error in Riffusion API:", error)
 
-    // Return the remix result with enhanced metadata
-    return {
-      success: true,
-      audioUrl: finalUrl,
-      fallbackUrls: fallbackUrls,
-      isDummy: true,
-      message: "Premium audio processing applied with professional mastering.",
-      metadata: {
-        genre: "EDM",
-        subgenre: presetParams.category,
-        preset: presetParams.name,
-        bpm: bpm,
-        key: key,
-        duration: 180, // 3 minutes
-        peakDb: -1.0, // -1dB peak as requested
-        format: quality === "studio" ? "WAV 44.1kHz 16-bit" : "MP3 320kbps",
-        quality: quality,
-        soundElements: presetParams.soundElements,
-        referenceArtists: presetParams.referenceArtists
-      },
-      processingDetails: {
-        bassBoost: presetParams.parameters.bassBoost,
-        compression: presetParams.parameters.compression,
-        stereoWidth: presetParams.parameters.stereoWidth,
-        saturation: presetParams.parameters.saturation,
-        sidechainAmount: presetParams.parameters.sidechainAmount
+      // Return fallback samples if API fails
+      return {
+        voiceAudioUrl: null,
+        musicUrl: null,
+        fallbackVoiceUrl: fallbackVoiceSample,
+        fallbackMusicUrl: fallbackMusicSample,
+        success: false,
+        message: `Error generating audio: ${error instanceof Error ? error.message : String(error)}`,
+        useFallback: true,
       }
     }
   } catch (error) {
-    console.error("Error in premium remix generation:", error)
+    console.error("Error generating audio:", error)
     return {
+      voiceAudioUrl: null,
+      musicUrl: null,
+      fallbackVoiceUrl: "/samples/sample-neutral.mp3",
+      fallbackMusicUrl: "/samples/music-neutral.mp3",
       success: false,
-      error: error.message || "Failed to generate premium remix",
-      fallbackUrls: getEdmFallbackTracks(style, bpm)
+      message: `Error generating audio: ${error instanceof Error ? error.message : String(error)}`,
+      useFallback: true,
+    }
+  }
+}
+
+/**
+ * Generate music for a specific mood
+ */
+export async function generateMusicForMood(mood: string) {
+  try {
+    console.log(`Generating music for mood: ${mood}`)
+
+    // Generate music using Riffusion
+    const musicUrl = await generateBackgroundMusic(mood)
+
+    return {
+      musicUrl,
+      fallbackUrl: MUSIC_FALLBACK[mood] || "/samples/music-neutral.mp3",
+      success: true,
+      message: "Music generated successfully with Riffusion",
+    }
+  } catch (error) {
+    console.error("Error generating music:", error)
+    return {
+      musicUrl: null,
+      fallbackUrl: MUSIC_FALLBACK[mood] || "/samples/music-neutral.mp3",
+      success: false,
+      message: `Error generating music: ${error instanceof Error ? error.message : String(error)}`,
+      useFallback: true,
+    }
+  }
+}
+
+/**
+ * Generate a remix track
+ */
+export async function generateRemixTrack(description: string) {
+  try {
+    console.log(`Generating remix for: ${description}`)
+
+    // Generate remix using Riffusion
+    const remixUrl = await generateRemix(description)
+
+    return {
+      remixUrl,
+      fallbackUrl: "/samples/edm-remix-sample.mp3",
+      success: true,
+      message: "Remix generated successfully with Riffusion",
+    }
+  } catch (error) {
+    console.error("Error generating remix:", error)
+    return {
+      remixUrl: null,
+      fallbackUrl: "/samples/edm-remix-sample.mp3",
+      success: false,
+      message: `Error generating remix: ${error instanceof Error ? error.message : String(error)}`,
+      useFallback: true,
     }
   }
 }
