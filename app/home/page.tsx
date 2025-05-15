@@ -211,12 +211,20 @@ export default function HomePage() {
               <p className="mb-6 text-zinc-400">
                 Transform any song into an EDM remix with AI-powered creativity. Upload, remix, and enjoy!
               </p>
-              <Link href="/remix">
-                <Button className="bg-cyan-600 hover:bg-cyan-700">
-                  <Music className="mr-2 h-4 w-4" />
-                  Create remix
-                </Button>
-              </Link>
+              <div className="flex flex-wrap gap-2">
+                <Link href="/remix">
+                  <Button className="bg-cyan-600 hover:bg-cyan-700">
+                    <Music className="mr-2 h-4 w-4" />
+                    Create remix
+                  </Button>
+                </Link>
+
+                <Link href="/premium-remix">
+                  <Button className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700">
+                    <span className="mr-1">✨</span> Premium Studio
+                  </Button>
+                </Link>
+              </div>
 
               {/* New feature: Clear EDM Effects options */}
               <div className="mt-4 p-3 bg-black/30 rounded-lg border border-cyan-900/30">
@@ -333,18 +341,26 @@ export default function HomePage() {
 
       <div className="mt-12">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-2xl font-bold">EDM Playlists</h2>
+          <div>
+            <h2 className="text-2xl font-bold">Premium EDM Playlists</h2>
+            <div className="flex items-center mt-1">
+              <span className="text-cyan-400 text-sm font-medium mr-2">✨ Enhanced Audio Quality</span>
+              <span className="px-2 py-0.5 bg-cyan-900/30 text-xs rounded-full text-cyan-300">Studio-Grade Mastering</span>
+            </div>
+          </div>
           <div className="flex items-center gap-3">
             <Button variant="outline" size="sm" className="flex items-center gap-1 text-cyan-400 border-cyan-800/50">
               <Shuffle className="h-3 w-3" />
               <span>Shuffle</span>
             </Button>
-            <Button variant="link" className="text-cyan-400">
-              View all
-            </Button>
+            <Link href="/premium-remix">
+              <Button variant="link" className="text-cyan-400">
+                View all
+              </Button>
+            </Link>
           </div>
         </div>
-        <p className="mb-6 text-zinc-400">Explore our collection of EDM playlists</p>
+        <p className="mb-6 text-zinc-400">Explore our collection of premium EDM playlists with enhanced bass and crystal-clear highs</p>
 
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
           {edmPlaylists.map((playlist) => (
@@ -445,8 +461,23 @@ export default function HomePage() {
 
       {/* EDM AI Playlist Section */}
       <div className="mt-16 border-t border-zinc-800 pt-8">
-        <h2 className="text-3xl font-bold mb-6">🎧 EDM AI Playlist</h2>
-        <p className="text-zinc-400 mb-8">AI-generated EDM tracks with deep bass and futuristic vibes</p>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-3xl font-bold">🎧 Premium EDM AI Playlist</h2>
+            <div className="flex items-center mt-2">
+              <span className="text-cyan-400 text-sm font-medium mr-2">✨ Professional Mastering</span>
+              <span className="px-2 py-0.5 bg-cyan-900/30 text-xs rounded-full text-cyan-300 mr-2">Deep Bass</span>
+              <span className="px-2 py-0.5 bg-cyan-900/30 text-xs rounded-full text-cyan-300 mr-2">Punchy Mids</span>
+              <span className="px-2 py-0.5 bg-cyan-900/30 text-xs rounded-full text-cyan-300">Crystal Highs</span>
+            </div>
+          </div>
+          <Link href="/premium-remix">
+            <Button className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700">
+              <span className="mr-1">✨</span> Premium Studio
+            </Button>
+          </Link>
+        </div>
+        <p className="text-zinc-400 mb-8">AI-generated EDM tracks with enhanced bass boost, sidechain compression, and club-quality sound</p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {aiEdmTracks.map((track) => (

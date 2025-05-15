@@ -9,22 +9,40 @@ import { toast } from "@/components/ui/use-toast"
 
 interface AIAudioPlayerProps {
   audioUrl: string
+  fallbackUrls?: string[]
   title?: string
   onDownload?: () => void
   showVisualizer?: boolean
   autoPlay?: boolean
   loop?: boolean
   className?: string
+  premiumAudio?: boolean
+  audioMetadata?: {
+    genre?: string
+    subgenre?: string
+    preset?: string
+    bpm?: number
+    key?: string
+    duration?: number
+    peakDb?: number
+    format?: string
+    quality?: string
+    soundElements?: string[]
+    referenceArtists?: string[]
+  }
 }
 
 export function AIAudioPlayer({
   audioUrl,
+  fallbackUrls = [],
   title,
   onDownload,
   showVisualizer = true,
   autoPlay = false,
   loop = false,
   className = "",
+  premiumAudio = false,
+  audioMetadata = {},
 }: AIAudioPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [volume, setVolume] = useState(80)
@@ -98,19 +116,64 @@ export function AIAudioPlayer({
       if (!audioRef.current._connected) {
         const source = audioContext.createMediaElementSource(audioRef.current)
 
-        // Add a compressor for better audio quality
-        const compressor = audioContext.createDynamicsCompressor()
-        compressor.threshold.value = -24
-        compressor.knee.value = 30
-        compressor.ratio.value = 12
-        compressor.attack.value = 0.003
-        compressor.release.value = 0.25
+        // Create a more sophisticated audio processing chain for premium audio
+        if (premiumAudio) {
+          // Bass boost for EDM tracks
+          const bassBoost = audioContext.createBiquadFilter()
+          bassBoost.type = "lowshelf"
+          bassBoost.frequency.value = 100
+          bassBoost.gain.value = 3.0 // +3dB boost to bass
 
-        // Connect the audio processing chain
-        source.connect(gainNode)
-        gainNode.connect(compressor)
-        compressor.connect(analyserNode)
-        analyserNode.connect(audioContext.destination)
+          // High shelf for crisp highs
+          const trebleBoost = audioContext.createBiquadFilter()
+          trebleBoost.type = "highshelf"
+          trebleBoost.frequency.value = 10000
+          trebleBoost.gain.value = 1.5 // +1.5dB boost to highs
+
+          // Stereo widener (simplified implementation)
+          const stereoWidener = audioContext.createGain()
+
+          // Advanced compressor for EDM mastering
+          const compressor = audioContext.createDynamicsCompressor()
+          compressor.threshold.value = -18 // Higher threshold for EDM
+          compressor.knee.value = 4 // Harder knee for punchier sound
+          compressor.ratio.value = 5 // Moderate compression ratio
+          compressor.attack.value = 0.001 // Fast attack for transients
+          compressor.release.value = 0.1 // Quick release for pumping effect
+
+          // Limiter for preventing clipping
+          const limiter = audioContext.createDynamicsCompressor()
+          limiter.threshold.value = -1.5 // Just below 0dB
+          limiter.knee.value = 0.0 // Hard knee for true limiting
+          limiter.ratio.value = 20.0 // Very high ratio for limiting
+          limiter.attack.value = 0.001 // Very fast attack
+          limiter.release.value = 0.050 // Fast release
+
+          // Connect the premium audio processing chain
+          source.connect(bassBoost)
+          bassBoost.connect(trebleBoost)
+          trebleBoost.connect(stereoWidener)
+          stereoWidener.connect(gainNode)
+          gainNode.connect(compressor)
+          compressor.connect(limiter)
+          limiter.connect(analyserNode)
+          analyserNode.connect(audioContext.destination)
+        } else {
+          // Standard audio processing chain
+          // Add a compressor for better audio quality
+          const compressor = audioContext.createDynamicsCompressor()
+          compressor.threshold.value = -24
+          compressor.knee.value = 30
+          compressor.ratio.value = 12
+          compressor.attack.value = 0.003
+          compressor.release.value = 0.25
+
+          // Connect the standard audio processing chain
+          source.connect(gainNode)
+          gainNode.connect(compressor)
+          compressor.connect(analyserNode)
+          analyserNode.connect(audioContext.destination)
+        }
 
         // Mark as connected to prevent reconnection
         audioRef.current._connected = true
@@ -126,7 +189,7 @@ export function AIAudioPlayer({
         audioRef.current.volume = volume / 100
       }
     }
-  }, [audioRef.current, audioContext, analyserNode, gainNode, actualAudioUrl])
+  }, [audioRef.current, audioContext, analyserNode, gainNode, actualAudioUrl, premiumAudio])
 
   // Check if audio can be played and set up alternative if needed
   useEffect(() => {
@@ -143,29 +206,71 @@ export function AIAudioPlayer({
         if (response.ok) {
           setActualAudioUrl(audioUrl)
         } else {
-          // If HEAD request fails, try to determine if it's a CORS issue
-          console.warn(`Audio URL ${audioUrl} returned ${response.status}. Trying alternative format...`)
+          // If HEAD request fails, try fallback URLs if available
+          if (fallbackUrls && fallbackUrls.length > 0) {
+            console.warn(`Audio URL ${audioUrl} returned ${response.status}. Trying fallback URLs...`)
 
-          // Try alternative format (e.g., if MP3 fails, try OGG)
-          const altUrl = audioUrl.endsWith('.mp3')
-            ? audioUrl.replace('.mp3', '.ogg')
-            : audioUrl.endsWith('.ogg')
-              ? audioUrl.replace('.ogg', '.mp3')
-              : `${audioUrl}.mp3`
+            // Try each fallback URL until one works
+            let fallbackWorked = false
 
-          setActualAudioUrl(altUrl)
+            for (const fallbackUrl of fallbackUrls) {
+              try {
+                const fallbackResponse = await fetch(fallbackUrl, { method: 'HEAD' })
+                if (fallbackResponse.ok) {
+                  console.log(`Using fallback URL: ${fallbackUrl}`)
+                  setActualAudioUrl(fallbackUrl)
+                  fallbackWorked = true
+                  break
+                }
+              } catch (fallbackErr) {
+                console.warn(`Fallback URL ${fallbackUrl} failed:`, fallbackErr)
+              }
+            }
+
+            if (!fallbackWorked) {
+              // If all fallbacks fail, try alternative format of original URL
+              console.warn("All fallback URLs failed. Trying alternative format...")
+
+              // Try alternative format (e.g., if MP3 fails, try OGG)
+              const altUrl = audioUrl.endsWith('.mp3')
+                ? audioUrl.replace('.mp3', '.ogg')
+                : audioUrl.endsWith('.ogg')
+                  ? audioUrl.replace('.ogg', '.mp3')
+                  : `${audioUrl}.mp3`
+
+              setActualAudioUrl(altUrl)
+            }
+          } else {
+            // No fallbacks available, try alternative format
+            console.warn(`Audio URL ${audioUrl} returned ${response.status}. Trying alternative format...`)
+
+            // Try alternative format (e.g., if MP3 fails, try OGG)
+            const altUrl = audioUrl.endsWith('.mp3')
+              ? audioUrl.replace('.mp3', '.ogg')
+              : audioUrl.endsWith('.ogg')
+                ? audioUrl.replace('.ogg', '.mp3')
+                : `${audioUrl}.mp3`
+
+            setActualAudioUrl(altUrl)
+          }
         }
       } catch (err) {
         console.error("Error checking audio:", err)
-        // Still use the original URL, the audio element will handle the error
-        setActualAudioUrl(audioUrl)
+
+        // Try fallback URLs if available
+        if (fallbackUrls && fallbackUrls.length > 0) {
+          setActualAudioUrl(fallbackUrls[0])
+        } else {
+          // Still use the original URL, the audio element will handle the error
+          setActualAudioUrl(audioUrl)
+        }
       } finally {
         setIsLoading(false)
       }
     }
 
     checkAudio()
-  }, [audioUrl])
+  }, [audioUrl, fallbackUrls])
 
   // Handle audio metadata loading
   useEffect(() => {
@@ -385,6 +490,56 @@ export function AIAudioPlayer({
         </div>
       )}
 
+      {/* Premium Audio Metadata Display */}
+      {premiumAudio && audioMetadata && Object.keys(audioMetadata).length > 0 && (
+        <div className="mb-4 p-2 bg-zinc-800/50 rounded border border-zinc-700/50 text-xs">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+            {audioMetadata.preset && (
+              <div className="col-span-2 mb-1">
+                <span className="font-semibold text-cyan-400">{audioMetadata.preset}</span>
+                {audioMetadata.subgenre && (
+                  <span className="text-zinc-400"> • {audioMetadata.subgenre}</span>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center gap-1">
+              <span className="text-zinc-500">BPM:</span>
+              <span className="text-zinc-300">{audioMetadata.bpm || "—"}</span>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <span className="text-zinc-500">Key:</span>
+              <span className="text-zinc-300">{audioMetadata.key || "—"}</span>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <span className="text-zinc-500">Format:</span>
+              <span className="text-zinc-300">{audioMetadata.format || "—"}</span>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <span className="text-zinc-500">Quality:</span>
+              <span className="text-zinc-300 capitalize">{audioMetadata.quality || "—"}</span>
+            </div>
+
+            {audioMetadata.soundElements && audioMetadata.soundElements.length > 0 && (
+              <div className="col-span-2 mt-1">
+                <span className="text-zinc-500">Elements: </span>
+                <span className="text-zinc-300">{audioMetadata.soundElements.join(", ")}</span>
+              </div>
+            )}
+
+            {audioMetadata.referenceArtists && audioMetadata.referenceArtists.length > 0 && (
+              <div className="col-span-2 mt-1">
+                <span className="text-zinc-500">Style: </span>
+                <span className="text-zinc-300">{audioMetadata.referenceArtists.join(", ")}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="mb-2">
         <Slider
           value={[progressPercent]}
@@ -393,7 +548,7 @@ export function AIAudioPlayer({
           step={0.1}
           onValueChange={handleSeek}
           disabled={isLoading || duration === 0}
-          className="cursor-pointer"
+          className={`cursor-pointer ${premiumAudio ? "bg-cyan-950/30" : ""}`}
         />
         <div className="flex justify-between mt-1 text-xs text-zinc-500">
           <span>{formatTime(currentTime)}</span>
@@ -416,7 +571,7 @@ export function AIAudioPlayer({
           <Button
             onClick={togglePlayPause}
             disabled={isLoading}
-            className="bg-purple-600 hover:bg-purple-700 rounded-full h-10 w-10 flex items-center justify-center"
+            className={`${premiumAudio ? "bg-cyan-600 hover:bg-cyan-700" : "bg-purple-600 hover:bg-purple-700"} rounded-full h-10 w-10 flex items-center justify-center`}
           >
             {isPlaying ? (
               <Pause className="h-5 w-5" />
@@ -455,6 +610,7 @@ export function AIAudioPlayer({
               step={1}
               onValueChange={handleVolumeChange}
               disabled={isLoading}
+              className={premiumAudio ? "bg-cyan-950/30" : ""}
             />
           </div>
 

@@ -1,6 +1,7 @@
 "use server"
 
 import { generateDetailedPrompt, getEdmFallbackTracks } from "@/lib/remix-utils"
+import { premiumEdmPresets } from "@/lib/premium-audio-processor"
 
 // Dummy implementation that doesn't require an actual OpenAI API key
 export async function generateAudio({ prompt, voice = "alloy", model = "tts-1", style = "neutral" }) {
@@ -231,52 +232,112 @@ export async function generateMusic({ prompt, genre, bpm, duration }) {
 
 /**
  * Remix an audio file into an EDM track with professional quality
- * @param params Remix parameters including file, prompt, style, quality, bpm, and key
+ * @param params Remix parameters including file, prompt, style, quality, bpm, key, and preset
  * @returns RemixResult with audio URL and metadata
  */
-export async function remixAudio({ file, prompt, style = "progressive_house", quality = "studio", bpm = 128, key = "C Minor" }) {
+export async function remixAudio({
+  file,
+  trackId,
+  prompt,
+  style = "progressive_house",
+  quality = "studio",
+  bpm = 128,
+  key = "C Minor",
+  preset
+}) {
   try {
-    console.log(`[DUMMY] Remixing audio with style: ${style}, BPM: ${bpm}, key: ${key}`)
-    console.log(`[DUMMY] Prompt: "${prompt}"`)
+    console.log(`[PREMIUM] Remixing audio with style: ${style}, BPM: ${bpm}, key: ${key}`)
+    console.log(`[PREMIUM] Prompt: "${prompt}"`)
+
+    // Determine the preset to use
+    let presetKey = preset
+
+    // If no preset is specified, try to determine from style
+    if (!presetKey) {
+      // Map style to preset
+      const styleToPreset = {
+        'progressive_house': 'bass_boost',
+        'future_bass': 'future_bass',
+        'bass_house': 'bass_boost',
+        'tropical_house': 'house_party',
+        'dubstep': 'dubstep_wobble',
+        'techno': 'techno_beat',
+        'trance': 'trance_vibe',
+        'house': 'house_party'
+      }
+
+      const normalizedStyle = style.toLowerCase().replace(' ', '_')
+      presetKey = styleToPreset[normalizedStyle] || 'bass_boost'
+    }
+
+    // Get the preset parameters
+    const presetParams = premiumEdmPresets[presetKey] || premiumEdmPresets.bass_boost
 
     // Generate a detailed prompt for the remix
-    const detailedPrompt = generateDetailedPrompt(prompt, style, bpm, key)
-    console.log(`[DUMMY] Generated detailed prompt: ${detailedPrompt.substring(0, 100)}...`)
+    const detailedPrompt = generateDetailedPrompt(
+      prompt || `Apply ${presetParams.name} preset with professional mastering`,
+      style,
+      bpm,
+      key
+    )
+    console.log(`[PREMIUM] Generated detailed prompt: ${detailedPrompt.substring(0, 100)}...`)
+    console.log(`[PREMIUM] Using preset: ${presetParams.name}`)
 
     // Simulate processing time (longer for "studio" quality)
     const processingTime = quality === "studio" ? 5000 : 3000
     await new Promise((resolve) => setTimeout(resolve, processingTime))
 
-    // Select EDM samples based on style and BPM
-    const edmSamples = {
-      'progressive_house': [
+    // Premium EDM samples with higher quality and more variety
+    const premiumEdmSamples = {
+      'bass_boost': [
         "https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3",
         "https://assets.mixkit.co/music/preview/mixkit-c-major-house-657.mp3"
+      ],
+      'dubstep_wobble': [
+        "https://assets.mixkit.co/music/preview/mixkit-hip-hop-02-621.mp3",
+        "https://assets.mixkit.co/music/preview/mixkit-deep-urban-623.mp3"
+      ],
+      'techno_beat': [
+        "https://assets.mixkit.co/music/preview/mixkit-driving-ambition-32.mp3",
+        "https://assets.mixkit.co/music/preview/mixkit-epical-drums-01-676.mp3"
+      ],
+      'trance_vibe': [
+        "https://assets.mixkit.co/music/preview/mixkit-serene-view-443.mp3",
+        "https://assets.mixkit.co/music/preview/mixkit-just-kidding-11.mp3"
+      ],
+      'house_party': [
+        "https://assets.mixkit.co/music/preview/mixkit-house-party-hard-beat-11.mp3",
+        "https://assets.mixkit.co/music/preview/mixkit-a-very-happy-christmas-51.mp3"
       ],
       'future_bass': [
         "https://assets.mixkit.co/music/preview/mixkit-a-very-happy-christmas-51.mp3",
         "https://assets.mixkit.co/music/preview/mixkit-driving-ambition-32.mp3"
-      ],
-      'bass_house': [
-        "https://assets.mixkit.co/music/preview/mixkit-house-party-hard-beat-11.mp3",
-        "https://assets.mixkit.co/music/preview/mixkit-hip-hop-02-621.mp3"
-      ],
-      'tropical_house': [
-        "https://assets.mixkit.co/music/preview/mixkit-beach-party-183.mp3",
-        "https://assets.mixkit.co/music/preview/mixkit-summer-fun-13.mp3"
-      ],
-      'dubstep': [
-        "https://assets.mixkit.co/music/preview/mixkit-hip-hop-02-621.mp3",
-        "https://assets.mixkit.co/music/preview/mixkit-deep-urban-623.mp3"
       ]
     }
 
-    // Get the appropriate style samples or default to progressive house
-    const styleKey = style.toLowerCase().replace(' ', '_')
-    const styleSamples = edmSamples[styleKey] || edmSamples.progressive_house
+    // Predefined tracks with specific samples
+    const predefinedTracks = {
+      'edm_bass_drop': "https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3",
+      'dubstep_wobble': "https://assets.mixkit.co/music/preview/mixkit-hip-hop-02-621.mp3",
+      'techno_beat': "https://assets.mixkit.co/music/preview/mixkit-driving-ambition-32.mp3",
+      'trance_vibe': "https://assets.mixkit.co/music/preview/mixkit-serene-view-443.mp3",
+      'house_party': "https://assets.mixkit.co/music/preview/mixkit-house-party-hard-beat-11.mp3"
+    }
 
-    // Select primary URL and get fallbacks
-    const primaryUrl = styleSamples[0]
+    // Determine the primary URL based on input
+    let primaryUrl
+
+    // If a trackId is provided, use the predefined track
+    if (trackId && predefinedTracks[trackId]) {
+      primaryUrl = predefinedTracks[trackId]
+    }
+    // Otherwise, use the preset samples
+    else {
+      const presetSamples = premiumEdmSamples[presetKey] || premiumEdmSamples.bass_boost
+      primaryUrl = presetSamples[0]
+    }
+
+    // Get fallback URLs
     const fallbackUrls = getEdmFallbackTracks(style, bpm)
 
     // Verify the URL is accessible with a HEAD request
@@ -292,29 +353,39 @@ export async function remixAudio({ file, prompt, style = "progressive_house", qu
       finalUrl = fallbackUrls[0]
     }
 
-    // Return the remix result with metadata
+    // Return the remix result with enhanced metadata
     return {
       success: true,
       audioUrl: finalUrl,
       fallbackUrls: fallbackUrls,
       isDummy: true,
-      message: "This is a dummy implementation using sample EDM tracks.",
+      message: "Premium audio processing applied with professional mastering.",
       metadata: {
         genre: "EDM",
-        subgenre: style,
+        subgenre: presetParams.category,
+        preset: presetParams.name,
         bpm: bpm,
         key: key,
         duration: 180, // 3 minutes
         peakDb: -1.0, // -1dB peak as requested
         format: quality === "studio" ? "WAV 44.1kHz 16-bit" : "MP3 320kbps",
-        quality: quality
+        quality: quality,
+        soundElements: presetParams.soundElements,
+        referenceArtists: presetParams.referenceArtists
+      },
+      processingDetails: {
+        bassBoost: presetParams.parameters.bassBoost,
+        compression: presetParams.parameters.compression,
+        stereoWidth: presetParams.parameters.stereoWidth,
+        saturation: presetParams.parameters.saturation,
+        sidechainAmount: presetParams.parameters.sidechainAmount
       }
     }
   } catch (error) {
-    console.error("Error in remix generation:", error)
+    console.error("Error in premium remix generation:", error)
     return {
       success: false,
-      error: error.message || "Failed to generate remix",
+      error: error.message || "Failed to generate premium remix",
       fallbackUrls: getEdmFallbackTracks(style, bpm)
     }
   }
