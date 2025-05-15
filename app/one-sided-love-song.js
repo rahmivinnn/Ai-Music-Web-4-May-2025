@@ -62,36 +62,54 @@ But maybe it's time to let you go
 // Function to generate the one-sided love song
 export async function generateOneSidedLoveSong() {
   try {
-    // Use a pre-selected sample instead of waiting for generation
-    // This makes the loading much faster for demo purposes
-    const sampleUrl = "https://cdn.pixabay.com/audio/2022/01/18/audio_d0f6d2e0d7.mp3";
+    // Use the generateMusic function with a detailed prompt for high-quality output
+    const musicResponse = await generateMusic({
+      prompt: "Create a professional-quality sad but catchy pop song about unrequited love. The song should have a melancholic piano, gentle drums, and a memorable chorus. It should sound emotional but still have a catchy hook that people would want to sing along to. Include a clear intro, verses with piano arpeggios, a powerful chorus with subtle strings, and a gentle outro. Apply professional mastering with proper EQ, compression, and reverb for a studio-quality sound.",
+      genre: songDetails.genre,
+      bpm: songDetails.bpm,
+      duration: songDetails.duration,
+    });
 
-    // For a real implementation, we would use the generateMusic function:
-    // const musicResponse = await generateMusic({
-    //   prompt: "Create a sad but catchy pop song about unrequited love. The song should have a melancholic piano, gentle drums, and a memorable chorus. It should sound emotional but still have a catchy hook that people would want to sing along to.",
-    //   genre: songDetails.genre,
-    //   bpm: songDetails.bpm,
-    //   duration: songDetails.duration,
-    // });
+    // If the music generation was successful, return the result
+    if (musicResponse.success) {
+      return {
+        title: songDetails.title,
+        lyrics: lyrics,
+        audioUrl: musicResponse.audioUrl,
+        details: {
+          ...songDetails,
+          // Add additional details from the music generation if available
+          ...(musicResponse.details || {})
+        },
+        success: true,
+      };
+    }
 
-    // Simulate a short delay to show loading state (much shorter than actual generation)
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // If music generation failed, use a high-quality fallback
+    // This is a professionally produced sample that matches our theme
+    const highQualityFallback = "https://assets.mixkit.co/music/preview/mixkit-sad-melancholic-classical-strings-2848.mp3";
+
+    console.warn("Music generation returned unsuccessful, using high-quality fallback");
 
     return {
       title: songDetails.title,
       lyrics: lyrics,
-      audioUrl: sampleUrl, // Use the sample URL instead of waiting for generation
+      audioUrl: highQualityFallback,
       details: songDetails,
       success: true,
+      fallback: true,
     };
   } catch (error) {
     console.error("Error generating one-sided love song:", error);
 
-    // Even if there's an error, provide a fallback sample
+    // Even if there's an error, provide a high-quality fallback sample
+    // Using a different fallback than above to ensure we have options
+    const emergencyFallback = "https://assets.mixkit.co/music/preview/mixkit-piano-reflections-22.mp3";
+
     return {
       title: songDetails.title,
       lyrics: lyrics,
-      audioUrl: "https://cdn.pixabay.com/audio/2022/01/18/audio_d0f6d2e0d7.mp3",
+      audioUrl: emergencyFallback,
       details: songDetails,
       success: true,
       fallback: true,

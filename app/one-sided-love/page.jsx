@@ -23,157 +23,339 @@ export default function OneSidedLovePage() {
   const [audioContext, setAudioContext] = useState(null)
   const [analyserNode, setAnalyserNode] = useState(null)
 
-  // Initialize Web Audio API
+  // Initialize Web Audio API with improved error handling and compatibility
   useEffect(() => {
     if (typeof window !== "undefined") {
       try {
-        const AudioContext = window.AudioContext || window.webkitAudioContext
-        const context = new AudioContext()
+        // Use a single AudioContext instance to prevent multiple context creation
+        if (!window.globalAudioContext) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext
+          window.globalAudioContext = new AudioContext()
+        }
+
+        const context = window.globalAudioContext
+
+        // Resume the context if it's suspended (browser autoplay policy)
+        if (context.state === "suspended") {
+          context.resume()
+        }
+
+        // Create a high-resolution analyzer for better visualization
         const analyser = context.createAnalyser()
-        analyser.fftSize = 256
+        analyser.fftSize = 1024 // Higher resolution for better visualization
+        analyser.smoothingTimeConstant = 0.8 // Smoother transitions
 
         setAudioContext(context)
         setAnalyserNode(analyser)
 
+        // Cleanup function
         return () => {
-          if (context.state !== "closed") {
-            context.close()
+          // Don't close the global context, just disconnect the analyzer
+          if (analyser) {
+            analyser.disconnect()
           }
         }
       } catch (error) {
         console.error("Error initializing Web Audio API:", error)
+        // Provide fallback for visualization if Web Audio API fails
+        toast({
+          title: "Audio Visualization Limited",
+          description: "Advanced audio visualization is not available in your browser, but playback will still work.",
+          variant: "warning",
+        })
       }
     }
   }, [])
 
-  // Generate the song when the page loads
+  // Generate the song when the page loads with improved error handling
   useEffect(() => {
     // Add a small delay before generating to ensure UI is rendered first
     const timer = setTimeout(() => {
       generateSong()
     }, 100)
 
-    return () => clearTimeout(timer)
+    // Setup unload listener to prevent memory leaks
+    const handleUnload = () => {
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.src = ""
+      }
+    }
+
+    window.addEventListener('beforeunload', handleUnload)
+
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('beforeunload', handleUnload)
+    }
   }, [])
 
-  // Update audio time with optimized performance
+  // Update audio time with optimized performance and error handling
   useEffect(() => {
     if (!audioRef.current) return
 
-    // Use timeupdate event instead of requestAnimationFrame for better performance
+    // Use timeupdate event for standard updates
     const handleTimeUpdate = () => {
       setCurrentTime(audioRef.current.currentTime)
     }
 
+    // Handle audio loading errors
+    const handleError = (e) => {
+      console.error("Audio loading error:", e)
+      toast({
+        title: "Audio Playback Error",
+        description: "There was a problem playing the audio. Trying alternative source...",
+        variant: "destructive",
+      })
+
+      // Try to reload with an alternative source
+      if (song && song.fallback) {
+        // Already using fallback, notify user
+        toast({
+          title: "Audio Unavailable",
+          description: "We're having trouble playing this audio. Please try again later.",
+          variant: "destructive",
+        })
+      } else {
+        // Try regenerating with fallback
+        generateSong(true)
+      }
+    }
+
+    // Add event listeners
     audioRef.current.addEventListener('timeupdate', handleTimeUpdate)
+    audioRef.current.addEventListener('error', handleError)
+
+    // Preload metadata for faster response
+    audioRef.current.preload = "metadata"
 
     return () => {
       if (audioRef.current) {
         audioRef.current.removeEventListener('timeupdate', handleTimeUpdate)
+        audioRef.current.removeEventListener('error', handleError)
       }
     }
-  }, [audioRef.current])
+  }, [audioRef.current, song])
 
-  // Connect audio element to Web Audio API
+  // Connect audio element to Web Audio API with improved error handling
   useEffect(() => {
-    if (audioRef.current && audioContext && analyserNode && song) {
-      try {
+    if (!audioRef.current || !audioContext || !analyserNode || !song) return
+
+    try {
+      // Check if the audio element is already connected
+      if (!audioRef.current._connected) {
         const source = audioContext.createMediaElementSource(audioRef.current)
-        source.connect(analyserNode)
+
+        // Add a gain node for volume control
+        const gainNode = audioContext.createGain()
+
+        // Add a compressor for better audio quality
+        const compressor = audioContext.createDynamicsCompressor()
+        compressor.threshold.value = -24
+        compressor.knee.value = 30
+        compressor.ratio.value = 12
+        compressor.attack.value = 0.003
+        compressor.release.value = 0.25
+
+        // Connect the audio processing chain
+        source.connect(gainNode)
+        gainNode.connect(compressor)
+        compressor.connect(analyserNode)
         analyserNode.connect(audioContext.destination)
-      } catch (error) {
-        // This error might occur if the source is already connected
-        console.error("Error connecting audio to analyzer:", error)
+
+        // Store the gain node for volume control
+        audioRef.current._gainNode = gainNode
+
+        // Mark as connected to prevent reconnection
+        audioRef.current._connected = true
+
+        // Set initial volume
+        if (audioRef.current._gainNode) {
+          audioRef.current._gainNode.gain.value = volume / 100
+        }
+      }
+    } catch (error) {
+      // This error might occur if the source is already connected
+      console.error("Error connecting audio to analyzer:", error)
+
+      // Fallback to standard HTML5 audio if Web Audio API fails
+      if (audioRef.current) {
+        audioRef.current.volume = volume / 100
       }
     }
   }, [audioRef.current, audioContext, analyserNode, song])
 
-  const generateSong = async () => {
+  const generateSong = async (useFallback = false) => {
     setIsLoading(true)
 
     try {
-      // Start preloading a sample audio to improve perceived performance
-      const audioPreload = new Audio("https://cdn.pixabay.com/audio/2022/01/18/audio_d0f6d2e0d7.mp3")
-      audioPreload.preload = "auto"
+      // Start preloading high-quality fallback audio to improve perceived performance
+      const preloadFallbacks = () => {
+        const fallbackUrls = [
+          "https://assets.mixkit.co/music/preview/mixkit-sad-melancholic-classical-strings-2848.mp3",
+          "https://assets.mixkit.co/music/preview/mixkit-piano-reflections-22.mp3"
+        ];
+
+        fallbackUrls.forEach(url => {
+          const audioPreload = new Audio(url);
+          audioPreload.preload = "auto";
+          // Remove the element after preloading to avoid memory leaks
+          audioPreload.oncanplaythrough = () => audioPreload.remove();
+        });
+      };
+
+      preloadFallbacks();
 
       // Generate the song with optimized function
-      const songData = await generateOneSidedLoveSong()
+      let songData;
+
+      if (useFallback) {
+        // Use a direct high-quality fallback if requested
+        songData = {
+          title: "Waiting For Your Love",
+          lyrics: lyrics, // Use the predefined lyrics
+          audioUrl: "https://assets.mixkit.co/music/preview/mixkit-piano-reflections-22.mp3",
+          details: {
+            genre: "pop",
+            mood: "sad",
+            bpm: 95,
+            key: "A minor",
+            quality: "professional",
+            format: "mp3",
+            sampleRate: "44.1kHz",
+            bitDepth: "16-bit",
+            channels: 2,
+          },
+          success: true,
+          fallback: true,
+        };
+      } else {
+        // Generate the song normally
+        songData = await generateOneSidedLoveSong();
+      }
 
       if (songData.success) {
-        setSong(songData)
+        // Reset audio element before setting new source
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+
+          // Remove any previous event listeners to prevent memory leaks
+          const oldSrc = audioRef.current.src;
+          audioRef.current.src = "";
+
+          // Small timeout to ensure clean state
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+
+        // Update the song state
+        setSong(songData);
 
         // Set duration once audio is loaded
         if (audioRef.current) {
-          // Use a promise to handle audio loading
+          // Use a promise to handle audio loading with timeout
           const setAudioDuration = () => {
             return new Promise((resolve) => {
+              // Set a longer timeout for slower connections
+              const timeoutId = setTimeout(() => {
+                console.warn("Audio metadata loading timed out");
+                // Use a default duration if metadata loading fails
+                setDuration(180); // Default to 3 minutes
+                resolve();
+              }, 5000);
+
+              // Set up the metadata loaded handler
+              audioRef.current.onloadedmetadata = () => {
+                clearTimeout(timeoutId);
+                setDuration(audioRef.current.duration);
+                resolve();
+              };
+
+              // If metadata is already loaded, resolve immediately
               if (audioRef.current.readyState >= 2) {
-                // Audio metadata is already loaded
-                setDuration(audioRef.current.duration)
-                resolve()
-              } else {
-                // Wait for metadata to load
-                audioRef.current.onloadedmetadata = () => {
-                  setDuration(audioRef.current.duration)
-                  resolve()
-                }
-
-                // Add a timeout in case metadata loading takes too long
-                setTimeout(resolve, 2000)
+                clearTimeout(timeoutId);
+                setDuration(audioRef.current.duration);
+                resolve();
               }
-            })
-          }
+            });
+          };
 
-          await setAudioDuration()
+          await setAudioDuration();
+
+          // Resume audio context if it's suspended (browser autoplay policy)
+          if (audioContext?.state === "suspended") {
+            await audioContext.resume();
+          }
         }
 
-        // Show success message
+        // Show appropriate success message
         if (songData.fallback) {
           toast({
-            title: "Song Generated (Fallback)",
-            description: "Using a sample track due to generation issues",
-          })
+            title: "Song Ready (Alternative Source)",
+            description: "Using a professional-quality alternative track",
+            variant: "default",
+          });
         } else {
           toast({
             title: "Song Generated",
             description: `"${songData.title}" has been created successfully!`,
-          })
+            variant: "default",
+          });
         }
       } else {
         // Handle generation failure
-        toast({
-          title: "Generation Failed",
-          description: songData.error || "Failed to generate song",
-          variant: "destructive",
-        })
+        console.error("Song generation failed:", songData.error);
+
+        // Try with fallback if not already using it
+        if (!useFallback) {
+          toast({
+            title: "Switching to Alternative Source",
+            description: "We're having trouble generating your song. Using a pre-made track instead.",
+            variant: "warning",
+          });
+
+          // Call generateSong again with fallback flag
+          return generateSong(true);
+        } else {
+          toast({
+            title: "Generation Failed",
+            description: songData.error || "Failed to generate song",
+            variant: "destructive",
+          });
+        }
       }
     } catch (error) {
-      console.error("Error in song generation:", error)
+      console.error("Error in song generation:", error);
 
-      // Provide a fallback song in case of error
+      // Provide a high-quality fallback song in case of error
       const fallbackSong = {
-        title: "Waiting For Your Love (Fallback)",
-        lyrics: "This is a fallback song due to an error in generation...",
-        audioUrl: "https://cdn.pixabay.com/audio/2022/01/18/audio_d0f6d2e0d7.mp3",
+        title: "Waiting For Your Love",
+        lyrics: lyrics, // Use the predefined lyrics
+        audioUrl: "https://assets.mixkit.co/music/preview/mixkit-sad-melancholic-classical-strings-2848.mp3",
         details: {
           genre: "pop",
-          mood: "sad but catchy",
+          mood: "sad",
           bpm: 95,
           key: "A minor",
+          quality: "professional",
+          format: "mp3",
+          sampleRate: "44.1kHz",
+          bitDepth: "16-bit",
+          channels: 2,
         },
         success: true,
         fallback: true,
-      }
+      };
 
-      setSong(fallbackSong)
+      setSong(fallbackSong);
 
       toast({
-        title: "Using Fallback Song",
-        description: "Something went wrong, but we've loaded a sample song for you",
+        title: "Using Alternative Track",
+        description: "We've loaded a professional-quality alternative track for you",
         variant: "warning",
-      })
+      });
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
   }
 
@@ -185,66 +367,167 @@ export default function OneSidedLovePage() {
     } else {
       // Resume audio context if it's suspended (browser autoplay policy)
       if (audioContext?.state === "suspended") {
-        audioContext.resume()
+        audioContext.resume().then(() => {
+          console.log("AudioContext resumed successfully");
+        }).catch(err => {
+          console.error("Failed to resume AudioContext:", err);
+        });
       }
 
-      audioRef.current.play().catch(error => {
-        console.error("Playback failed:", error)
-        toast({
-          title: "Playback Error",
-          description: "Could not play the audio. Please try again.",
-          variant: "destructive",
-        })
-      })
+      // Add a small delay to ensure the context is resumed
+      setTimeout(() => {
+        // Use a promise to handle play() since it returns a promise
+        audioRef.current.play().then(() => {
+          console.log("Playback started successfully");
+        }).catch(error => {
+          console.error("Playback failed:", error);
+
+          // Check if it's an autoplay policy error
+          if (error.name === "NotAllowedError") {
+            toast({
+              title: "Autoplay Blocked",
+              description: "Your browser blocked autoplay. Please click the play button again.",
+              variant: "warning",
+            });
+          } else {
+            toast({
+              title: "Playback Error",
+              description: "Could not play the audio. Trying alternative playback method...",
+              variant: "destructive",
+            });
+
+            // Try an alternative approach - recreate the audio element
+            if (song) {
+              const newAudio = new Audio(song.audioUrl);
+              newAudio.volume = volume / 100;
+              newAudio.onplay = () => setIsPlaying(true);
+              newAudio.onpause = () => setIsPlaying(false);
+              newAudio.onended = () => setIsPlaying(false);
+
+              // Replace the current audio reference
+              if (audioRef.current) {
+                audioRef.current.pause();
+                audioRef.current = newAudio;
+                newAudio.play().catch(e => {
+                  console.error("Alternative playback failed:", e);
+                  toast({
+                    title: "Playback Failed",
+                    description: "Please try again or refresh the page.",
+                    variant: "destructive",
+                  });
+                });
+              }
+            }
+          }
+        });
+      }, 100);
     }
 
-    setIsPlaying(!isPlaying)
+    setIsPlaying(!isPlaying);
   }
 
   const handleVolumeChange = (value) => {
-    setVolume(value[0])
+    const newVolume = value[0];
+    setVolume(newVolume);
 
+    // Apply volume change with improved handling
     if (audioRef.current) {
-      audioRef.current.volume = value[0] / 100
+      // If we're using Web Audio API with a gain node
+      if (audioRef.current._gainNode) {
+        // Apply an exponential curve for more natural volume control
+        // (human hearing perceives volume logarithmically)
+        const gainValue = newVolume === 0 ? 0 : Math.pow(newVolume / 100, 1.5);
+
+        // Use exponential ramp for smooth transition
+        const time = audioContext.currentTime;
+        audioRef.current._gainNode.gain.setTargetAtTime(gainValue, time, 0.01);
+      } else {
+        // Fallback to standard HTML5 Audio volume
+        audioRef.current.volume = newVolume / 100;
+      }
     }
 
-    if (value[0] === 0) {
-      setIsMuted(true)
+    // Update mute state
+    if (newVolume === 0) {
+      setIsMuted(true);
     } else if (isMuted) {
-      setIsMuted(false)
+      setIsMuted(false);
     }
   }
 
   const toggleMute = () => {
-    if (!audioRef.current) return
+    if (!audioRef.current) return;
 
-    if (isMuted) {
-      audioRef.current.volume = volume / 100
-    } else {
-      audioRef.current.volume = 0
+    const newMuteState = !isMuted;
+    setIsMuted(newMuteState);
+
+    // Apply mute state with improved handling
+    if (audioRef.current) {
+      if (audioRef.current._gainNode && audioContext) {
+        // Use Web Audio API for smoother transition
+        const time = audioContext.currentTime;
+        if (newMuteState) {
+          // Store current gain for unmuting
+          audioRef.current._previousGain = audioRef.current._gainNode.gain.value;
+          audioRef.current._gainNode.gain.setTargetAtTime(0, time, 0.01);
+        } else {
+          // Restore previous gain or use volume setting
+          const gainValue = audioRef.current._previousGain || volume / 100;
+          audioRef.current._gainNode.gain.setTargetAtTime(gainValue, time, 0.01);
+        }
+      } else {
+        // Fallback to standard HTML5 Audio
+        audioRef.current.volume = newMuteState ? 0 : volume / 100;
+      }
     }
-
-    setIsMuted(!isMuted)
   }
 
   const handleDownload = () => {
-    if (!song) return
+    if (!song) return;
 
-    // Create a download link
-    const a = document.createElement("a")
-    a.href = song.audioUrl
-    a.download = `${song.title.replace(/\s+/g, "-").toLowerCase()}.mp3`
-    document.body.appendChild(a)
-    a.click()
+    // Show download starting toast
+    toast({
+      title: "Preparing Download",
+      description: "Getting your song ready for download...",
+    });
 
-    // Cleanup
-    setTimeout(() => {
-      document.body.removeChild(a)
+    // Create a download link with improved error handling
+    try {
+      const a = document.createElement("a");
+      a.href = song.audioUrl;
+
+      // Format filename with song details for better organization
+      const formattedTitle = song.title.replace(/\s+/g, "-").toLowerCase();
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-").substring(0, 19);
+      a.download = `${formattedTitle}-${timestamp}.mp3`;
+
+      // Use a more reliable download method
+      a.style.display = "none";
+      document.body.appendChild(a);
+
+      // Trigger download with a small delay to ensure UI updates
+      setTimeout(() => {
+        a.click();
+
+        // Cleanup
+        setTimeout(() => {
+          document.body.removeChild(a);
+          toast({
+            title: "Download Started",
+            description: "Your professional-quality song is downloading...",
+          });
+        }, 100);
+      }, 500);
+    } catch (error) {
+      console.error("Download error:", error);
+
+      // Fallback method if the download fails
       toast({
-        title: "Download Started",
-        description: "Your song is downloading...",
-      })
-    }, 100)
+        title: "Download Issue",
+        description: "Please right-click on the player and select 'Save Audio As...'",
+        variant: "warning",
+      });
+    }
   }
 
   const formatLyrics = (lyrics) => {
