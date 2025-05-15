@@ -4,7 +4,6 @@ import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { AIAudioPlayer } from "@/components/ai-audio-player"
 import { toast } from "@/components/ui/use-toast"
@@ -18,44 +17,44 @@ export function PremiumRemixStudio() {
   const [file, setFile] = useState<File | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  
+
   // Remix parameters
   const [selectedPreset, setSelectedPreset] = useState<string>("bass_boost")
   const [bpm, setBpm] = useState<number>(128)
   const [key, setKey] = useState<string>("C Minor")
   const [quality, setQuality] = useState<string>("studio")
   const [customPrompt, setCustomPrompt] = useState<string>("")
-  
+
   // Processing state
   const [isProcessing, setIsProcessing] = useState<boolean>(false)
   const [remixResult, setRemixResult] = useState<any>(null)
-  
+
   // Handle file upload
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
     if (!selectedFile) return
-    
+
     setFileError(null)
-    
+
     // Validate the audio file
     if (!selectedFile.type.startsWith('audio/')) {
       setFileError("Please upload an audio file (MP3, WAV, OGG, FLAC).")
       return
     }
-    
+
     // Check file size (max 50MB)
     if (selectedFile.size > 50 * 1024 * 1024) {
       setFileError("File size exceeds 50MB limit.")
       return
     }
-    
+
     setFile(selectedFile)
     toast({
       title: "File uploaded",
       description: `${selectedFile.name} (${(selectedFile.size / 1024 / 1024).toFixed(2)} MB)`,
     })
   }
-  
+
   // Process the audio file
   const processAudio = async () => {
     if (!file && !customPrompt) {
@@ -66,13 +65,13 @@ export function PremiumRemixStudio() {
       })
       return
     }
-    
+
     setIsProcessing(true)
-    
+
     try {
       // Get the preset parameters
       const preset = premiumEdmPresets[selectedPreset]
-      
+
       // Call the remix function
       const result = await remixAudio({
         file: file,
@@ -83,7 +82,7 @@ export function PremiumRemixStudio() {
         key: key,
         preset: selectedPreset
       })
-      
+
       if (result.success) {
         setRemixResult(result)
         toast({
@@ -108,11 +107,11 @@ export function PremiumRemixStudio() {
       setIsProcessing(false)
     }
   }
-  
+
   // Handle preset change
   const handlePresetChange = (preset: string) => {
     setSelectedPreset(preset)
-    
+
     // Update BPM and key based on preset
     const presetData = premiumEdmPresets[preset]
     if (presetData) {
@@ -120,11 +119,11 @@ export function PremiumRemixStudio() {
       setKey(presetData.keyCompatibility[0])
     }
   }
-  
+
   // Handle download
   const handleDownload = () => {
     if (!remixResult || !remixResult.audioUrl) return
-    
+
     // Create a download link
     const a = document.createElement("a")
     a.href = remixResult.audioUrl
@@ -132,27 +131,42 @@ export function PremiumRemixStudio() {
     a.style.display = "none"
     document.body.appendChild(a)
     a.click()
-    
+
     // Cleanup
     setTimeout(() => {
       document.body.removeChild(a)
     }, 100)
-    
+
     toast({
       title: "Download started",
       description: "Your premium remixed audio is downloading...",
     })
   }
-  
+
+  // State to toggle between upload and presets views
+  const [activeView, setActiveView] = useState<'upload' | 'presets'>('upload')
+
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="upload" className="w-full">
-        <TabsList className="grid grid-cols-2 mb-4">
-          <TabsTrigger value="upload">Upload & Remix</TabsTrigger>
-          <TabsTrigger value="presets">Preset Library</TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="upload" className="space-y-6">
+      <div className="flex gap-2 mb-4">
+        <Button
+          variant={activeView === 'upload' ? 'default' : 'outline'}
+          className={activeView === 'upload' ? 'bg-cyan-600 hover:bg-cyan-700' : ''}
+          onClick={() => setActiveView('upload')}
+        >
+          Upload & Remix
+        </Button>
+        <Button
+          variant={activeView === 'presets' ? 'default' : 'outline'}
+          className={activeView === 'presets' ? 'bg-cyan-600 hover:bg-cyan-700' : ''}
+          onClick={() => setActiveView('presets')}
+        >
+          Preset Library
+        </Button>
+      </div>
+
+      {activeView === 'upload' && (
+        <div className="space-y-6">
           {/* Upload Section */}
           <Card>
             <CardHeader>
@@ -177,8 +191,8 @@ export function PremiumRemixStudio() {
                   <Upload className="h-10 w-10 text-zinc-500 mb-2" />
                   <p className="text-sm text-zinc-400 mb-2">Drag & drop audio file here</p>
                   <p className="text-xs text-zinc-500 mb-4">or click to browse</p>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     size="sm"
                     onClick={() => fileInputRef.current?.click()}
                   >
@@ -195,7 +209,7 @@ export function PremiumRemixStudio() {
               </div>
             </CardContent>
           </Card>
-          
+
           {/* Remix Controls */}
           <Card>
             <CardHeader>
@@ -224,7 +238,7 @@ export function PremiumRemixStudio() {
                       <span className="text-sm font-mono w-8 text-center">{bpm}</span>
                     </div>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <label className="text-sm text-zinc-400">Key</label>
                     <Select value={key} onValueChange={setKey}>
@@ -244,7 +258,7 @@ export function PremiumRemixStudio() {
                     </Select>
                   </div>
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-sm text-zinc-400">Quality</label>
@@ -258,7 +272,7 @@ export function PremiumRemixStudio() {
                       </SelectContent>
                     </Select>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <label className="text-sm text-zinc-400">Preset</label>
                     <Select value={selectedPreset} onValueChange={handlePresetChange}>
@@ -273,7 +287,7 @@ export function PremiumRemixStudio() {
                     </Select>
                   </div>
                 </div>
-                
+
                 <div className="space-y-2">
                   <label className="text-sm text-zinc-400">Custom Prompt (Optional)</label>
                   <textarea
@@ -283,9 +297,9 @@ export function PremiumRemixStudio() {
                     className="w-full h-20 bg-zinc-900 border border-zinc-700 rounded-md p-2 text-sm"
                   />
                 </div>
-                
-                <Button 
-                  onClick={processAudio} 
+
+                <Button
+                  onClick={processAudio}
                   disabled={isProcessing}
                   className="w-full bg-cyan-600 hover:bg-cyan-700"
                 >
@@ -304,7 +318,7 @@ export function PremiumRemixStudio() {
               </div>
             </CardContent>
           </Card>
-          
+
           {/* Result Section */}
           {remixResult && (
             <Card>
@@ -327,9 +341,9 @@ export function PremiumRemixStudio() {
                   premiumAudio={true}
                   audioMetadata={remixResult.metadata}
                 />
-                
+
                 <div className="mt-4 flex justify-end">
-                  <Button 
+                  <Button
                     onClick={handleDownload}
                     className="bg-cyan-600 hover:bg-cyan-700"
                   >
@@ -340,28 +354,28 @@ export function PremiumRemixStudio() {
               </CardContent>
             </Card>
           )}
-        </TabsContent>
-        
-        <TabsContent value="presets">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Music className="h-5 w-5 text-cyan-400" />
-                Premium EDM Presets
-              </CardTitle>
-              <CardDescription>
-                Try our professional EDM presets with built-in samples
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <CompositionConverter 
-                initialPreset="bass_boost"
-                showUpload={false}
-              />
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+        </div>
+      )}
+
+      {activeView === 'presets' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Music className="h-5 w-5 text-cyan-400" />
+              Premium EDM Presets
+            </CardTitle>
+            <CardDescription>
+              Try our professional EDM presets with built-in samples
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CompositionConverter
+              initialPreset="bass_boost"
+              showUpload={false}
+            />
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
