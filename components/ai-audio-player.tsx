@@ -7,6 +7,22 @@ import { Play, Pause, Volume2, VolumeX, Download, SkipBack, SkipForward, AlertCi
 import { AudioVisualizer } from "@/components/audio-visualizer"
 import { toast } from "@/components/ui/use-toast"
 
+// Extend HTMLAudioElement to include our custom property
+declare global {
+  interface HTMLAudioElement {
+    _connected?: boolean;
+  }
+
+  interface GainNode {
+    _previousGain?: number;
+  }
+
+  interface Window {
+    globalAudioContext?: AudioContext;
+    webkitAudioContext?: typeof AudioContext;
+  }
+}
+
 interface AIAudioPlayerProps {
   audioUrl: string
   fallbackUrls?: string[]

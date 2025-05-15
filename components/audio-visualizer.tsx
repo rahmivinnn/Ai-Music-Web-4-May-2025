@@ -2,6 +2,13 @@
 
 import { useEffect, useRef } from "react"
 
+// Add roundRect method to CanvasRenderingContext2D interface
+declare global {
+  interface CanvasRenderingContext2D {
+    roundRect?: (x: number, y: number, width: number, height: number, radius: number) => void;
+  }
+}
+
 interface AudioVisualizerProps {
   isPlaying: boolean;
   audioFile: { url: string } | null;
@@ -83,7 +90,14 @@ export function AudioVisualizer({
             // Draw rounded bars for a more polished look
             const barY = height / 2 - barHeight / 2
             ctx.beginPath()
-            ctx.roundRect(x, barY, barWidth, barHeight, 2)
+
+            // Use roundRect if available, otherwise fallback to regular rect
+            if (ctx.roundRect) {
+              ctx.roundRect(x, barY, barWidth, barHeight, 2)
+            } else {
+              ctx.rect(x, barY, barWidth, barHeight)
+            }
+
             ctx.fill()
 
             x += barWidth + 1
@@ -99,7 +113,11 @@ export function AudioVisualizer({
             // Use cyan color palette
             ctx.fillStyle = i % 6 === 0 ? "#00e0e0" : "#00a0a0"
             ctx.beginPath()
-            ctx.roundRect(i, height / 2 - barHeight / 2, 2, barHeight, 1)
+            if (ctx.roundRect) {
+              ctx.roundRect(i, height / 2 - barHeight / 2, 2, barHeight, 1)
+            } else {
+              ctx.rect(i, height / 2 - barHeight / 2, 2, barHeight)
+            }
             ctx.fill()
           }
         }
@@ -110,7 +128,11 @@ export function AudioVisualizer({
           const barHeight = Math.abs(h) + 5
           ctx.fillStyle = "#52525b"
           ctx.beginPath()
-          ctx.roundRect(i, height / 2 - barHeight / 2, 2, barHeight, 1)
+          if (ctx.roundRect) {
+            ctx.roundRect(i, height / 2 - barHeight / 2, 2, barHeight, 1)
+          } else {
+            ctx.rect(i, height / 2 - barHeight / 2, 2, barHeight)
+          }
           ctx.fill()
         }
       }

@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { AIAudioPlayer } from "@/components/ai-audio-player"
 import { toast } from "@/components/ui/use-toast"
 import { Upload, Download, Waveform, Loader2, Music } from "lucide-react"
@@ -30,17 +30,17 @@ export function CompositionConverter({
   const [file, setFile] = useState<File | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  
+
   // Remix parameters
   const [selectedPreset, setSelectedPreset] = useState<string>(initialPreset)
   const [bpm, setBpm] = useState<number>(128)
   const [key, setKey] = useState<string>("C Minor")
-  
+
   // Processing state
   const [isProcessing, setIsProcessing] = useState<boolean>(false)
   const [remixResult, setRemixResult] = useState<any>(null)
   const [selectedTrack, setSelectedTrack] = useState<string | null>(null)
-  
+
   // Predefined tracks
   const predefinedTracks = [
     { id: "edm_bass_drop", name: "EDM Bass Drop", preset: "bass_boost" },
@@ -49,50 +49,50 @@ export function CompositionConverter({
     { id: "trance_vibe", name: "Trance Vibe", preset: "trance_vibe" },
     { id: "house_party", name: "House Party", preset: "house_party" }
   ]
-  
+
   // Handle file upload
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
     if (!selectedFile) return
-    
+
     setFileError(null)
-    
+
     // Validate the audio file
     if (!selectedFile.type.startsWith('audio/')) {
       setFileError("Please upload an audio file (MP3, WAV, OGG, FLAC).")
       return
     }
-    
+
     setFile(selectedFile)
     toast({
       title: "File uploaded",
       description: `${selectedFile.name} (${(selectedFile.size / 1024 / 1024).toFixed(2)} MB)`,
     })
-    
+
     // Auto-process the file with the selected preset
     processAudio(selectedFile, selectedPreset)
   }
-  
+
   // Handle track selection
   const handleTrackSelection = (trackId: string) => {
     const track = predefinedTracks.find(t => t.id === trackId)
     if (!track) return
-    
+
     setSelectedTrack(trackId)
     setSelectedPreset(track.preset)
-    
+
     // Process the predefined track
     processTrack(track)
   }
-  
+
   // Process a predefined track
   const processTrack = async (track: any) => {
     setIsProcessing(true)
-    
+
     try {
       // Get the preset parameters
       const preset = premiumEdmPresets[track.preset]
-      
+
       // Call the remix function with the track ID
       const result = await remixAudio({
         trackId: track.id,
@@ -102,7 +102,7 @@ export function CompositionConverter({
         bpm: preset.bpmRange[0],
         key: preset.keyCompatibility[0]
       })
-      
+
       if (result.success) {
         setRemixResult(result)
         toast({
@@ -127,19 +127,19 @@ export function CompositionConverter({
       setIsProcessing(false)
     }
   }
-  
+
   // Process an uploaded audio file
   const processAudio = async (audioFile: File, presetKey: string) => {
     setIsProcessing(true)
-    
+
     try {
       // Get the preset parameters
       const preset = premiumEdmPresets[presetKey]
-      
+
       // Create a FormData object to send the file
       const formData = new FormData()
       formData.append('file', audioFile)
-      
+
       // Call the remix function
       const result = await remixAudio({
         file: audioFile,
@@ -149,7 +149,7 @@ export function CompositionConverter({
         bpm: bpm,
         key: key
       })
-      
+
       if (result.success) {
         setRemixResult(result)
         toast({
@@ -174,11 +174,11 @@ export function CompositionConverter({
       setIsProcessing(false)
     }
   }
-  
+
   // Handle preset change
   const handlePresetChange = (preset: string) => {
     setSelectedPreset(preset)
-    
+
     // If we have a file, reprocess it with the new preset
     if (file) {
       processAudio(file, preset)
@@ -189,11 +189,11 @@ export function CompositionConverter({
       }
     }
   }
-  
+
   // Handle download
   const handleDownload = () => {
     if (!remixResult || !remixResult.audioUrl) return
-    
+
     // Create a download link
     const a = document.createElement("a")
     a.href = remixResult.audioUrl
@@ -201,18 +201,18 @@ export function CompositionConverter({
     a.style.display = "none"
     document.body.appendChild(a)
     a.click()
-    
+
     // Cleanup
     setTimeout(() => {
       document.body.removeChild(a)
     }, 100)
-    
+
     toast({
       title: "Download started",
       description: "Your remixed audio is downloading...",
     })
   }
-  
+
   return (
     <div className={`space-y-4 ${className}`}>
       {/* Track Selection */}
@@ -220,7 +220,7 @@ export function CompositionConverter({
         <h3 className="text-lg font-medium">Select Track</h3>
         <div className="grid grid-cols-1 gap-2">
           {predefinedTracks.map((track) => (
-            <Card 
+            <Card
               key={track.id}
               className={`cursor-pointer transition-colors ${
                 selectedTrack === track.id ? "bg-cyan-900/30 border-cyan-500" : "bg-zinc-900/50 hover:bg-zinc-800/50"
@@ -240,7 +240,7 @@ export function CompositionConverter({
           ))}
         </div>
       </div>
-      
+
       {/* Upload Section */}
       {showUpload && (
         <div className="space-y-2">
@@ -257,8 +257,8 @@ export function CompositionConverter({
               <Upload className="h-10 w-10 text-zinc-500 mb-2" />
               <p className="text-sm text-zinc-400 mb-2">Drag & drop audio file here</p>
               <p className="text-xs text-zinc-500 mb-4">or click to browse</p>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size="sm"
                 onClick={() => fileInputRef.current?.click()}
               >
@@ -275,7 +275,7 @@ export function CompositionConverter({
           </div>
         </div>
       )}
-      
+
       {/* Remix Controls */}
       {showControls && (
         <div className="space-y-4">
@@ -295,7 +295,7 @@ export function CompositionConverter({
                 <span className="text-sm font-mono w-8 text-center">{bpm}</span>
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <label className="text-sm text-zinc-400">Key</label>
               <Select value={key} onValueChange={setKey}>
@@ -315,7 +315,7 @@ export function CompositionConverter({
           </div>
         </div>
       )}
-      
+
       {/* EDM Presets */}
       {showPresets && (
         <div className="space-y-4">
@@ -334,7 +334,7 @@ export function CompositionConverter({
           </div>
         </div>
       )}
-      
+
       {/* Now Playing */}
       {remixResult && (
         <div className="space-y-2">
@@ -343,8 +343,8 @@ export function CompositionConverter({
             <div className="mb-2 flex justify-between items-center">
               <div>
                 <div className="font-medium">
-                  {selectedTrack 
-                    ? predefinedTracks.find(t => t.id === selectedTrack)?.name 
+                  {selectedTrack
+                    ? predefinedTracks.find(t => t.id === selectedTrack)?.name
                     : file?.name || "Processed Audio"}
                 </div>
                 <div className="text-xs text-zinc-400">Composition Converter</div>
@@ -355,7 +355,7 @@ export function CompositionConverter({
                 </Button>
               </div>
             </div>
-            
+
             <AIAudioPlayer
               audioUrl={remixResult.audioUrl}
               fallbackUrls={remixResult.fallbackUrls}
@@ -365,7 +365,7 @@ export function CompositionConverter({
           </div>
         </div>
       )}
-      
+
       {/* Processing Indicator */}
       {isProcessing && (
         <div className="flex items-center justify-center py-8">
