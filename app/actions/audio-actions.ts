@@ -1,5 +1,7 @@
 "use server"
 
+import { generateDetailedPrompt, getEdmFallbackTracks } from "@/lib/remix-utils"
+
 // Dummy implementation that doesn't require an actual OpenAI API key
 export async function generateAudio({ prompt, voice = "alloy", model = "tts-1", style = "neutral" }) {
   try {
@@ -224,5 +226,96 @@ export async function generateMusic({ prompt, genre, bpm, duration }) {
     message: "This is a dummy implementation using sample audio files.",
     genre: genre,
     bpm: bpm,
+  }
+}
+
+/**
+ * Remix an audio file into an EDM track with professional quality
+ * @param params Remix parameters including file, prompt, style, quality, bpm, and key
+ * @returns RemixResult with audio URL and metadata
+ */
+export async function remixAudio({ file, prompt, style = "progressive_house", quality = "studio", bpm = 128, key = "C Minor" }) {
+  try {
+    console.log(`[DUMMY] Remixing audio with style: ${style}, BPM: ${bpm}, key: ${key}`)
+    console.log(`[DUMMY] Prompt: "${prompt}"`)
+
+    // Generate a detailed prompt for the remix
+    const detailedPrompt = generateDetailedPrompt(prompt, style, bpm, key)
+    console.log(`[DUMMY] Generated detailed prompt: ${detailedPrompt.substring(0, 100)}...`)
+
+    // Simulate processing time (longer for "studio" quality)
+    const processingTime = quality === "studio" ? 5000 : 3000
+    await new Promise((resolve) => setTimeout(resolve, processingTime))
+
+    // Select EDM samples based on style and BPM
+    const edmSamples = {
+      'progressive_house': [
+        "https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3",
+        "https://assets.mixkit.co/music/preview/mixkit-c-major-house-657.mp3"
+      ],
+      'future_bass': [
+        "https://assets.mixkit.co/music/preview/mixkit-a-very-happy-christmas-51.mp3",
+        "https://assets.mixkit.co/music/preview/mixkit-driving-ambition-32.mp3"
+      ],
+      'bass_house': [
+        "https://assets.mixkit.co/music/preview/mixkit-house-party-hard-beat-11.mp3",
+        "https://assets.mixkit.co/music/preview/mixkit-hip-hop-02-621.mp3"
+      ],
+      'tropical_house': [
+        "https://assets.mixkit.co/music/preview/mixkit-beach-party-183.mp3",
+        "https://assets.mixkit.co/music/preview/mixkit-summer-fun-13.mp3"
+      ],
+      'dubstep': [
+        "https://assets.mixkit.co/music/preview/mixkit-hip-hop-02-621.mp3",
+        "https://assets.mixkit.co/music/preview/mixkit-deep-urban-623.mp3"
+      ]
+    }
+
+    // Get the appropriate style samples or default to progressive house
+    const styleKey = style.toLowerCase().replace(' ', '_')
+    const styleSamples = edmSamples[styleKey] || edmSamples.progressive_house
+
+    // Select primary URL and get fallbacks
+    const primaryUrl = styleSamples[0]
+    const fallbackUrls = getEdmFallbackTracks(style, bpm)
+
+    // Verify the URL is accessible with a HEAD request
+    let finalUrl = primaryUrl
+    try {
+      const response = await fetch(primaryUrl, { method: 'HEAD' })
+      if (!response.ok) {
+        console.warn(`Primary audio URL ${primaryUrl} is not accessible, using fallback`)
+        finalUrl = fallbackUrls[0]
+      }
+    } catch (error) {
+      console.error("Error checking audio URL:", error)
+      finalUrl = fallbackUrls[0]
+    }
+
+    // Return the remix result with metadata
+    return {
+      success: true,
+      audioUrl: finalUrl,
+      fallbackUrls: fallbackUrls,
+      isDummy: true,
+      message: "This is a dummy implementation using sample EDM tracks.",
+      metadata: {
+        genre: "EDM",
+        subgenre: style,
+        bpm: bpm,
+        key: key,
+        duration: 180, // 3 minutes
+        peakDb: -1.0, // -1dB peak as requested
+        format: quality === "studio" ? "WAV 44.1kHz 16-bit" : "MP3 320kbps",
+        quality: quality
+      }
+    }
+  } catch (error) {
+    console.error("Error in remix generation:", error)
+    return {
+      success: false,
+      error: error.message || "Failed to generate remix",
+      fallbackUrls: getEdmFallbackTracks(style, bpm)
+    }
   }
 }
