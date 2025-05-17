@@ -781,7 +781,7 @@ export default function TextToAudioPage() {
     setMusicLoadingProgress(0)
 
     try {
-      // Generate audio using Riffusion
+      // Generate audio using the updated Riffusion API key
       const result = await generateAudio({
         prompt: text,
         voice: voice,
@@ -802,6 +802,10 @@ export default function TextToAudioPage() {
       if (result.success) {
         if (result.audioUrl) {
           setGeneratedVoiceAudio(result.audioUrl)
+          toast({
+            title: "Voice Generated",
+            description: "Voice audio has been generated successfully with the new API.",
+          })
         } else if (result.useFallback && result.fallbackUrl) {
           setUsingFallbackVoice(true)
           setGeneratedVoiceAudio(result.fallbackUrl)
@@ -815,6 +819,10 @@ export default function TextToAudioPage() {
 
         if (result.musicUrl) {
           setGeneratedMusicAudio(result.musicUrl)
+          toast({
+            title: "Music Generated",
+            description: "Background music has been generated successfully with the new API.",
+          })
         } else if (result.useFallback && result.fallbackMusicUrl) {
           setUsingFallbackMusic(true)
           setGeneratedMusicAudio(result.fallbackMusicUrl)
@@ -825,11 +833,6 @@ export default function TextToAudioPage() {
             variant: "warning",
           })
         }
-
-        toast({
-          title: "Audio Generated",
-          description: "Your text has been converted to audio with music using Riffusion!",
-        })
       } else if (result.useFallback) {
         // Use fallback samples if API fails
         if (result.fallbackUrl) {
@@ -844,7 +847,7 @@ export default function TextToAudioPage() {
 
         toast({
           title: "Using Sample Audio",
-          description: "Riffusion API unavailable. Using sample audio instead.",
+          description: "API unavailable. Using sample audio instead.",
           variant: "warning",
         })
       } else {

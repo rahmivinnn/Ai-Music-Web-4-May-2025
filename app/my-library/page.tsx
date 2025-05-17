@@ -62,6 +62,7 @@ export default function MyLibraryPage() {
     },
   ]
 
+  // Update the handlePlayPause function to use the actual audio from the API
   const handlePlayPause = (id: number) => {
     if (currentlyPlaying === id) {
       // If this track is already playing, pause it
@@ -76,8 +77,10 @@ export default function MyLibraryPage() {
 
       // Create a new audio element and play the selected track
       const audio = new Audio(audioSamples[id as keyof typeof audioSamples])
+      audio.crossOrigin = "anonymous" // Add this for CORS support
       audio.onended = () => setCurrentlyPlaying(null)
-      audio.onerror = () => {
+      audio.onerror = (e) => {
+        console.error("Audio error:", e)
         toast({
           title: "Error",
           description: "Failed to play audio. Please try again.",

@@ -28,8 +28,15 @@ export interface TextToSpeechOptions {
   quality?: string // low, medium, high
 }
 
-const RIFFUSION_API_KEY = "sk-ebfcc1a7d768b55f533eb6194e07f29b8c257373a7bdfcf634f937a0a5bba274"
-// Fix: Corrected API URL - Riffusion API uses /v1/images/generations for text-to-image generation
+export interface RemixOptions {
+  description: string
+  genre?: string
+  bpm?: number
+  quality?: "standard" | "high" | "ultra"
+  seed?: number
+}
+
+const RIFFUSION_API_KEY = "3909ddf5613106b3fa8c0926b4393b4a"
 const RIFFUSION_API_URL = "https://api.riffusion.com/v1"
 
 /**
@@ -38,10 +45,10 @@ const RIFFUSION_API_URL = "https://api.riffusion.com/v1"
 export async function generateRiffusionAudio(options: RiffusionOptions): Promise<RiffusionResponse> {
   try {
     const defaultOptions = {
-      negative_prompt: "low quality, noise, distortion, muffled, garbled",
-      denoising: 0.75,
-      guidance: 7.0,
-      num_inference_steps: 50,
+      negative_prompt: "low quality, noise, distortion, muffled, garbled, static, hiss",
+      denoising: 0.78,
+      guidance: 7.5,
+      num_inference_steps: 60,
       width: 512,
       height: 512,
       alpha: 0.5,
@@ -54,7 +61,6 @@ export async function generateRiffusionAudio(options: RiffusionOptions): Promise
 
     console.log("Generating Riffusion audio with options:", JSON.stringify(requestOptions))
 
-    // Fix: Updated to the correct endpoint for image generation
     const response = await fetch(`${RIFFUSION_API_URL}/images/generations`, {
       method: "POST",
       headers: {
@@ -72,8 +78,7 @@ export async function generateRiffusionAudio(options: RiffusionOptions): Promise
 
     const data = await response.json()
 
-    // Fix: Handle the response format correctly
-    // Riffusion returns data in a different format than we expected
+    // Handle the response format correctly
     if (data.data && data.data.length > 0) {
       const generatedItem = data.data[0]
       return {
@@ -220,17 +225,66 @@ export async function transformAudio(audioUrl: string, transformPrompt: string):
 /**
  * Generate a remix based on a description
  */
-export async function generateRemix(description: string): Promise<string> {
+export async function generateRemix(options: RemixOptions): Promise<RiffusionResponse> {
   try {
-    const enhancedPrompt = `${description}, high quality EDM remix, clear audio, professional production`
+    const { description, genre = "edm", bpm = 128, quality = "high", seed } = options
 
+    // Create an enhanced prompt based on the genre and description
+    let enhancedPrompt = ""
+
+    // Craft genre-specific prompts for better results
+    switch (genre.toLowerCase()) {
+      case "house":
+        enhancedPrompt = `House music remix with ${bpm} BPM, four-on-the-floor beat, ${description}, deep bass, clear hi-hats, professional club sound`
+        break
+      case "techno":
+        enhancedPrompt = `Techno remix with ${bpm} BPM, driving rhythm, ${description}, analog synths, industrial elements, warehouse sound`
+        break
+      case "trance":
+        enhancedPrompt = `Trance remix with ${bpm} BPM, uplifting melody, ${description}, euphoric build-up, atmospheric pads, festival energy`
+        break
+      case "dubstep":
+        enhancedPrompt = `Dubstep remix with ${bpm} BPM, heavy wobble bass, ${description}, intense drop, gritty texture, powerful sub-bass`
+        break
+      case "drum-and-bass":
+        enhancedPrompt = `Drum and Bass remix with ${bpm} BPM, fast breakbeats, ${description}, rolling bassline, energetic rhythm, crisp percussion`
+        break
+      default: // EDM or other genres
+        enhancedPrompt = `EDM remix with ${bpm} BPM, ${description}, punchy kick, clear mix, professional production, dance floor ready`
+    }
+
+    // Quality settings based on the selected quality level
+    const qualitySettings = {
+      standard: {
+        num_inference_steps: 40,
+        guidance: 7.0,
+        denoising: 0.75,
+      },
+      high: {
+        num_inference_steps: 60,
+        guidance: 7.5,
+        denoising: 0.78,
+      },
+      ultra: {
+        num_inference_steps: 80,
+        guidance: 8.0,
+        denoising: 0.82,
+      },
+    }
+
+    const settings = qualitySettings[quality]
+
+    // Generate the remix with optimized settings
     const result = await generateRiffusionAudio({
       prompt: enhancedPrompt,
-      num_inference_steps: 60, // Higher steps for better quality remixes
-      guidance: 8.0, // Stronger guidance for remixes
+      negative_prompt: "low quality, noise, distortion, muffled, garbled, amateur, poor mixing, clipping audio",
+      num_inference_steps: settings.num_inference_steps,
+      guidance: settings.guidance,
+      denoising: settings.denoising,
+      seed: seed,
     })
 
-    return result.audio_url
+    return result
   } catch (error) {
     console.error("Error generating remix:", error)
     throw error

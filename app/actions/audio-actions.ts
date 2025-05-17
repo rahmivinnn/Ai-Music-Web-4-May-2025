@@ -1,9 +1,10 @@
 "use server"
 
-import { generateBackgroundMusic, generateRemix, generateSpeechWithMusic } from "@/lib/riffusion-service"
+import { generateBackgroundMusic, generateSpeechWithMusic } from "@/lib/riffusion-service"
+import { generateRemix } from "@/lib/ai-audio-service"
 
-// Riffusion API key
-const RIFFUSION_API_KEY = "sk-ebfcc1a7d768b55f533eb6194e07f29b8c257373a7bdfcf634f937a0a5bba274"
+// API key
+const API_KEY = "3909ddf5613106b3fa8c0926b4393b4a"
 
 // Mapping for sample fallback based on voice and style
 const SAMPLE_MAPPING = {
@@ -65,6 +66,16 @@ const MUSIC_FALLBACK = {
   professional: "/samples/music-professional.mp3",
   excited: "/samples/music-excited.mp3",
   calm: "/samples/music-calm.mp3",
+}
+
+// Genre-specific fallback samples
+const GENRE_FALLBACK = {
+  edm: "/samples/edm-remix-sample.mp3",
+  house: "/samples/music-cheerful.mp3",
+  techno: "/samples/music-professional.mp3",
+  trance: "/samples/music-calm.mp3",
+  dubstep: "/samples/music-excited.mp3",
+  "drum-and-bass": "/samples/music-neutral.mp3",
 }
 
 /**
@@ -147,10 +158,15 @@ export async function generateMusic({ prompt, genre, bpm, duration = 30 }) {
     const enhancedPrompt = `${genre} music with ${bpm} BPM, ${prompt}, high quality audio`
 
     // Generate music using Riffusion
-    const musicUrl = await generateRemix(enhancedPrompt)
+    const result = await generateRemix({
+      prompt: enhancedPrompt,
+      genre,
+      bpm,
+      quality: "high",
+    })
 
     return {
-      audioUrl: musicUrl,
+      audioUrl: result.audioUrl,
       fallbackUrl,
       success: true,
       genre,
@@ -253,25 +269,69 @@ export async function generateMusicForMood(mood: string) {
 }
 
 /**
- * Generate a remix track
+ * Generate a remix track with enhanced options and improved error handling
  */
-export async function generateRemixTrack(description: string) {
+export async function generateRemixTrack(description: string, genre = "edm", bpm = 128, quality = "high") {
   try {
-    console.log(`Generating remix for: ${description}`)
+    console.log(`Generating remix for: "${description}", genre: ${genre}, bpm: ${bpm}, quality: ${quality}`)
 
-    // Generate remix using Riffusion
-    const remixUrl = await generateRemix(description)
+    // Get the appropriate fallback URL based on genre
+    const fallbackUrl = GENRE_FALLBACK[genre] || "/samples/edm-remix-sample.mp3"
 
-    return {
-      remixUrl,
-      fallbackUrl: "/samples/edm-remix-sample.mp3",
-      success: true,
-      message: "Remix generated successfully with Riffusion",
+    try {
+      // Generate remix using our AI Audio Service
+      const result = await generateRemix({
+        prompt: description,
+        genre,
+        bpm,
+        quality: quality as any,
+      })
+
+      // Validate the result to ensure it has the required fields
+      if (!result || !result.audioUrl) {
+        throw new Error("Invalid response from audio service: missing audioUrl")
+      }
+
+      // Save the remix to history (in a real app, this would store to a database)
+      const timestamp = new Date().toISOString()
+      console.log(`Remix generated at ${timestamp}: ${result.audioUrl}`)
+
+      return {
+        remixUrl: result.audioUrl,
+        imageUrl: result.imageUrl,
+        seed: result.seed,
+        fallbackUrl,
+        success: true,
+        message: "Remix generated successfully",
+        genre,
+        bpm,
+        quality,
+        timestamp,
+      }
+    } catch (error) {
+      console.error("Error in AI Audio API:", error)
+
+      // Provide detailed error information
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred during remix generation"
+
+      console.log(`Using fallback for genre: ${genre} due to error: ${errorMessage}`)
+
+      // Return fallback if API fails
+      return {
+        remixUrl: null,
+        imageUrl: null,
+        fallbackUrl,
+        success: false,
+        message: `Error generating remix: ${errorMessage}`,
+        useFallback: true,
+        errorDetails: errorMessage,
+      }
     }
   } catch (error) {
     console.error("Error generating remix:", error)
     return {
       remixUrl: null,
+      imageUrl: null,
       fallbackUrl: "/samples/edm-remix-sample.mp3",
       success: false,
       message: `Error generating remix: ${error instanceof Error ? error.message : String(error)}`,
