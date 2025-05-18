@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -8,7 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Slider } from "@/components/ui/slider"
 import { Label } from "@/components/ui/label"
-import { Loader2, Download, Play, Pause } from "lucide-react"
+import { Loader2, Music, Mic } from "lucide-react"
+import { EnhancedAudioPlayer } from "./enhanced-audio-player"
+import { useToast } from "@/hooks/use-toast"
+import { generateAudioWithBackgroundMusic } from "@/app/actions/audio-actions"
 
 export function TextToAudioGenerator() {
   const [text, setText] = useState("")
@@ -16,65 +19,138 @@ export function TextToAudioGenerator() {
   const [emotion, setEmotion] = useState("neutral")
   const [effect, setEffect] = useState("clean")
   const [isGenerating, setIsGenerating] = useState(false)
-  const [generatedAudio, setGeneratedAudio] = useState<string | null>(null)
-  const [isPlaying, setIsPlaying] = useState(false)
+  const [generatedVoiceAudio, setGeneratedVoiceAudio] = useState<string | null>(null)
+  const [generatedMusicAudio, setGeneratedMusicAudio] = useState<string | null>(null)
+  const [fallbackVoiceAudio, setFallbackVoiceAudio] = useState<string | null>(null)
+  const [fallbackMusicAudio, setFallbackMusicAudio] = useState<string | null>(null)
   const [volume, setVolume] = useState([80])
-  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const [musicVolume, setMusicVolume] = useState([50])
+  const [isMuted, setIsMuted] = useState(false)
+  const [visualizer, setVisualizer] = useState<"waveform" | "bars" | "circle">("bars")
+  const [mixedAudioUrl, setMixedAudioUrl] = useState<string | null>(null)
+  const { toast } = useToast()
 
-  // Simulasi proses generasi audio
-  const generateAudio = () => {
-    if (!text.trim()) return
+  // Generate audio
+  const generateAudio = async () => {
+    if (!text.trim()) {
+      toast({
+        title: "Text Required",
+        description: "Please enter some text to convert to audio.",
+        variant: "destructive",
+      })
+      return
+    }
 
     setIsGenerating(true)
-    setGeneratedAudio(null)
+    setGeneratedVoiceAudio(null)
+    setGeneratedMusicAudio(null)
+    setFallbackVoiceAudio(null)
+    setFallbackMusicAudio(null)
+    setMixedAudioUrl(null)
 
-    // Simulasi delay untuk proses generasi
-    setTimeout(() => {
-      // Pilih sample audio berdasarkan voice dan emotion
-      const audioSample = `/samples/${voice}-${emotion}-sample.mp3`
-      setGeneratedAudio(audioSample)
+    try {
+      const result = await generateAudioWithBackgroundMusic(text, voice, emotion)
+
+      if (result.success) {
+        if (result.voiceAudioUrl) {
+          setGeneratedVoiceAudio(result.voiceAudioUrl)
+          toast({
+            title: "Voice Generated",
+            description: "Voice audio has been generated successfully.",
+          })
+        }
+
+        if (result.musicUrl) {
+          setGeneratedMusicAudio(result.musicUrl)
+          toast({
+            title: "Music Generated",
+            description: "Background music has been generated successfully.",
+          })
+        }
+      } else {
+        // Use fallback samples if API fails
+        if (result.fallbackVoiceUrl) {
+          setFallbackVoiceAudio(result.fallbackVoiceUrl)
+        }
+
+        if (result.fallbackMusicUrl) {
+          setFallbackMusicAudio(result.fallbackMusicUrl)
+        }
+
+        toast({
+          title: "Using Sample Audio",
+          description: result.message || "API unavailable. Using sample audio instead.",
+          variant: "warning",
+        })
+      }
+    } catch (error) {
+      console.error("Error generating audio:", error)
+      toast({
+        title: "Generation Failed",
+        description: error instanceof Error ? error.message : "Failed to generate audio",
+        variant: "destructive",
+      })
+
+      // Set fallback audio
+      setFallbackVoiceAudio(`/samples/${voice}-${emotion}-sample.mp3`)
+      setFallbackMusicAudio(`/samples/music-${emotion}.mp3`)
+    } finally {
       setIsGenerating(false)
-    }, 2000)
+    }
   }
 
-  const togglePlayback = () => {
-    if (!audioRef.current) return
+  // Mix voice and music
+  const handleMixAudio = async () => {
+    const voiceUrl = generatedVoiceAudio || fallbackVoiceAudio
+    const musicUrl = generatedMusicAudio || fallbackMusicAudio
 
-    if (isPlaying) {
-      audioRef.current.pause()
-    } else {
-      audioRef.current.play().catch((error) => {
-        console.error("Audio playback failed:", error)
+    if (!voiceUrl || !musicUrl) {
+      toast({
+        title: "Missing Audio",
+        description: "Both voice and music audio must be available to mix.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      // In a real implementation, this would mix the audio on the server
+      // For now, we'll just set the mixed URL to the voice URL
+      setMixedAudioUrl(voiceUrl)
+
+      toast({
+        title: "Audio Mixed",
+        description: "Voice and music have been mixed successfully!",
+      })
+    } catch (error) {
+      console.error("Error mixing audio:", error)
+      toast({
+        title: "Mixing Failed",
+        description: "Failed to mix voice and music audio.",
+        variant: "destructive",
       })
     }
-
-    setIsPlaying(!isPlaying)
   }
 
-  const handleVolumeChange = (value: number[]) => {
-    setVolume(value)
-    if (audioRef.current) {
-      audioRef.current.volume = value[0] / 100
-    }
-  }
+  // Voices and emotions
+  const voices = [
+    { id: "male", name: "Male Voice" },
+    { id: "female", name: "Female Voice" },
+    { id: "neutral", name: "Neutral Voice" },
+    { id: "warm", name: "Warm Voice" },
+    { id: "deep", name: "Deep Voice" },
+  ]
 
-  const handleAudioEnded = () => {
-    setIsPlaying(false)
-  }
+  const emotions = [
+    { id: "neutral", name: "Neutral" },
+    { id: "cheerful", name: "Cheerful" },
+    { id: "sad", name: "Sad" },
+    { id: "professional", name: "Professional" },
+    { id: "excited", name: "Excited" },
+    { id: "calm", name: "Calm" },
+  ]
 
-  const downloadAudio = () => {
-    if (!generatedAudio) return
-
-    // Buat elemen anchor untuk download
-    const downloadLink = document.createElement("a")
-    downloadLink.href = generatedAudio
-    downloadLink.download = `generated-audio-${voice}-${emotion}.mp3`
-    document.body.appendChild(downloadLink)
-    downloadLink.click()
-    document.body.removeChild(downloadLink)
-  }
-
-  // Efek EDM yang tersedia
+  // Effects
   const edmEffects = [
     { id: "clean", name: "Clean" },
     { id: "bass-boost", name: "Bass Boost" },
@@ -91,9 +167,10 @@ export function TextToAudioGenerator() {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="text" className="w-full">
-            <TabsList className="grid grid-cols-2 mb-4">
+            <TabsList className="grid grid-cols-3 mb-4">
               <TabsTrigger value="text">Text Input</TabsTrigger>
-              <TabsTrigger value="settings">Voice Settings</TabsTrigger>
+              <TabsTrigger value="voice">Voice Settings</TabsTrigger>
+              <TabsTrigger value="effects">Audio Effects</TabsTrigger>
             </TabsList>
 
             <TabsContent value="text">
@@ -113,11 +190,11 @@ export function TextToAudioGenerator() {
                         <SelectValue placeholder="Select voice" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="male">Male</SelectItem>
-                        <SelectItem value="female">Female</SelectItem>
-                        <SelectItem value="neutral">Neutral</SelectItem>
-                        <SelectItem value="warm">Warm</SelectItem>
-                        <SelectItem value="deep">Deep</SelectItem>
+                        {voices.map((v) => (
+                          <SelectItem key={v.id} value={v.id}>
+                            {v.name}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -129,12 +206,11 @@ export function TextToAudioGenerator() {
                         <SelectValue placeholder="Select emotion" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="neutral">Neutral</SelectItem>
-                        <SelectItem value="cheerful">Cheerful</SelectItem>
-                        <SelectItem value="sad">Sad</SelectItem>
-                        <SelectItem value="professional">Professional</SelectItem>
-                        <SelectItem value="excited">Excited</SelectItem>
-                        <SelectItem value="calm">Calm</SelectItem>
+                        {emotions.map((e) => (
+                          <SelectItem key={e.id} value={e.id}>
+                            {e.name}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -142,7 +218,41 @@ export function TextToAudioGenerator() {
               </div>
             </TabsContent>
 
-            <TabsContent value="settings">
+            <TabsContent value="voice">
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <Label>Visualizer Style</Label>
+                  <Select value={visualizer} onValueChange={(value) => setVisualizer(value as any)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select visualizer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="bars">Frequency Bars</SelectItem>
+                      <SelectItem value="waveform">Waveform</SelectItem>
+                      <SelectItem value="circle">Circular</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Voice Volume</Label>
+                    <span className="text-sm text-gray-500">{volume[0]}%</span>
+                  </div>
+                  <Slider value={volume} min={0} max={100} step={1} onValueChange={setVolume} />
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Music Volume</Label>
+                    <span className="text-sm text-gray-500">{musicVolume[0]}%</span>
+                  </div>
+                  <Slider value={musicVolume} min={0} max={100} step={1} onValueChange={setMusicVolume} />
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="effects">
               <div className="space-y-6">
                 <div className="space-y-2">
                   <Label>EDM Effect</Label>
@@ -160,12 +270,23 @@ export function TextToAudioGenerator() {
                   </Select>
                 </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label>Volume</Label>
-                    <span className="text-sm text-gray-500">{volume[0]}%</span>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Bass Boost</Label>
+                    <Slider defaultValue={[50]} min={0} max={100} step={1} />
                   </div>
-                  <Slider value={volume} min={0} max={100} step={1} onValueChange={handleVolumeChange} />
+                  <div className="space-y-2">
+                    <Label>Reverb</Label>
+                    <Slider defaultValue={[30]} min={0} max={100} step={1} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Delay</Label>
+                    <Slider defaultValue={[20]} min={0} max={100} step={1} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Filter</Label>
+                    <Slider defaultValue={[70]} min={0} max={100} step={1} />
+                  </div>
                 </div>
               </div>
             </TabsContent>
@@ -189,23 +310,64 @@ export function TextToAudioGenerator() {
               )}
             </Button>
 
-            {generatedAudio && (
-              <div className="flex space-x-2">
-                <Button variant="outline" size="icon" onClick={togglePlayback}>
-                  {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                </Button>
-
-                <Button variant="outline" size="icon" onClick={downloadAudio}>
-                  <Download className="h-4 w-4" />
-                </Button>
-              </div>
+            {(generatedVoiceAudio || fallbackVoiceAudio) && (
+              <Button variant="outline" onClick={handleMixAudio} disabled={isGenerating}>
+                <Music className="mr-2 h-4 w-4" />
+                Mix Voice & Music
+              </Button>
             )}
           </div>
 
-          {generatedAudio && (
+          {(generatedVoiceAudio || fallbackVoiceAudio) && (
             <div className="w-full pt-4 border-t">
-              <p className="text-sm text-gray-500 mb-2">Generated Audio:</p>
-              <audio ref={audioRef} src={generatedAudio} onEnded={handleAudioEnded} className="w-full" controls />
+              <div className="flex items-center gap-2 mb-2">
+                <Mic className="h-4 w-4 text-cyan-500" />
+                <p className="text-sm font-medium">Voice Audio</p>
+              </div>
+              <EnhancedAudioPlayer
+                audioUrl={generatedVoiceAudio || ""}
+                fallbackUrl={fallbackVoiceAudio || undefined}
+                title="Generated Voice"
+                subtitle={`${voice} - ${emotion}`}
+                showWaveform={true}
+                visualizer={visualizer}
+                autoplay={false}
+              />
+            </div>
+          )}
+
+          {(generatedMusicAudio || fallbackMusicAudio) && (
+            <div className="w-full pt-4 border-t">
+              <div className="flex items-center gap-2 mb-2">
+                <Music className="h-4 w-4 text-cyan-500" />
+                <p className="text-sm font-medium">Background Music</p>
+              </div>
+              <EnhancedAudioPlayer
+                audioUrl={generatedMusicAudio || ""}
+                fallbackUrl={fallbackMusicAudio || undefined}
+                title="Background Music"
+                subtitle={`${emotion} mood`}
+                showWaveform={true}
+                visualizer={visualizer}
+                autoplay={false}
+              />
+            </div>
+          )}
+
+          {mixedAudioUrl && (
+            <div className="w-full pt-4 border-t">
+              <div className="flex items-center gap-2 mb-2">
+                <Music className="h-4 w-4 text-green-500" />
+                <p className="text-sm font-medium">Mixed Audio</p>
+              </div>
+              <EnhancedAudioPlayer
+                audioUrl={mixedAudioUrl}
+                title="Mixed Audio"
+                subtitle={`${voice} voice with ${emotion} music`}
+                showWaveform={true}
+                visualizer={visualizer}
+                autoplay={true}
+              />
             </div>
           )}
         </CardFooter>

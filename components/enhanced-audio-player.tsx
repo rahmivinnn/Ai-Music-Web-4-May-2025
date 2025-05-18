@@ -1,288 +1,159 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
-import { Play, Pause, Volume2, Download, RefreshCw } from "lucide-react"
+import { useState, useRef, useEffect, useCallback } from "react"
+import { Play, Pause, Volume2, VolumeX, Download, RefreshCw, Music } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Card, CardContent } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { toast } from "@/hooks/use-toast"
-
-interface EnhancedAudioPlayerProps {
-  audioUrl: string
-  fallbackUrl?: string
-  title?: string
-  subtitle?: string
-  imageUrl?: string
-  onPlaybackComplete?: () => void
-  onError?: (error: Error) => void
-  showWaveform?: boolean
-  autoplay?: boolean
-}
+import { detectFormat, isFormatSupported } from "@/lib/audio-engine"
+import type { AudioPlayerProps } from "@/types/audio"
 
 export function EnhancedAudioPlayer({
   audioUrl,
   fallbackUrl,
-  title = "Generated Audio",
-  subtitle = "AI Remix",
+  title = "Audio Track",
+  subtitle = "Audio Player",
   imageUrl,
   onPlaybackComplete,
   onError,
   showWaveform = true,
   autoplay = false,
-}: EnhancedAudioPlayerProps) {
+  visualizer = "bars",
+}: AudioPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [progress, setProgress] = useState(0)
   const [volume, setVolume] = useState([75])
+  const [isMuted, setIsMuted] = useState(false)
   const [duration, setDuration] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
   const [loadingProgress, setLoadingProgress] = useState(0)
-  const [error, setError] = useState<string | null>(null)
   const [usedFallback, setUsedFallback] = useState(false)
+  const [retryCount, setRetryCount] = useState(0)
+  const [audioSource, setAudioSource] = useState<string>(audioUrl)
+  const [formatInfo, setFormatInfo] = useState<string>("")
+  const [error, setError] = useState<string | null>(null)
 
-  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const audioElementRef = useRef<HTMLAudioElement | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
-  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null)
-  const gainRef = useRef<GainNode | null>(null)
-  const analyserRef = useRef<AnalyserNode | null>(null)
+  const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null)
+  const gainNodeRef = useRef<GainNode | null>(null)
+  const analyserNodeRef = useRef<AnalyserNode | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const animationRef = useRef<number | null>(null)
-  const waveformAnimationRef = useRef<number | null>(null)
 
   // Initialize audio context and nodes
+  const initAudioContext = useCallback(() => {
+    try {
+      if (typeof window === "undefined") return
+
+      if (!audioContextRef.current) {
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext
+        audioContextRef.current = new AudioContext()
+      }
+
+      if (!gainNodeRef.current && audioContextRef.current) {
+        gainNodeRef.current = audioContextRef.current.createGain()
+        gainNodeRef.current.gain.value = volume[0] / 100
+      }
+
+      if (!analyserNodeRef.current && audioContextRef.current) {
+        analyserNodeRef.current = audioContextRef.current.createAnalyser()
+        analyserNodeRef.current.fftSize = 256
+
+        if (gainNodeRef.current) {
+          gainNodeRef.current.connect(analyserNodeRef.current)
+          analyserNodeRef.current.connect(audioContextRef.current.destination)
+        }
+      }
+    } catch (error) {
+      console.error("Error initializing audio context:", error)
+      setError(`Could not initialize audio context: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }, [volume])
+
+  // Initialize audio element
   useEffect(() => {
-    setupAudioContext()
+    initAudioContext()
+
+    // Create audio element
+    const audioElement = new Audio()
+    audioElement.crossOrigin = "anonymous"
+    audioElementRef.current = audioElement
 
     return () => {
       // Clean up resources
-      if (audioRef.current) {
-        audioRef.current.pause()
-        audioRef.current.src = ""
+      if (audioElementRef.current) {
+        audioElementRef.current.pause()
+        audioElementRef.current.src = ""
+      }
+
+      if (sourceNodeRef.current) {
+        sourceNodeRef.current.disconnect()
       }
 
       if (audioContextRef.current) {
-        audioContextRef.current.close()
+        audioContextRef.current.close().catch(console.error)
       }
 
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current)
       }
-
-      if (waveformAnimationRef.current) {
-        cancelAnimationFrame(waveformAnimationRef.current)
-      }
     }
-  }, [])
+  }, [initAudioContext])
 
-  // Load audio when URL changes
+  // Load audio when URL changes or on retry
   useEffect(() => {
     if (audioUrl) {
-      loadAudio(audioUrl)
+      const format = detectFormat(audioUrl)
+
+      if (format && !isFormatSupported(format)) {
+        console.log(`Format ${format} is not supported in this browser. Using fallback.`)
+        setFormatInfo(`${format?.toUpperCase() || "Format"} not supported in this browser`)
+
+        if (fallbackUrl) {
+          const fallbackFormat = detectFormat(fallbackUrl)
+          if (fallbackFormat && isFormatSupported(fallbackFormat)) {
+            setAudioSource(fallbackUrl)
+            setUsedFallback(true)
+            loadAudio(fallbackUrl)
+            return
+          }
+        }
+
+        // If fallback also not supported, use MP3 fallback
+        const mp3Fallback = "/samples/edm-remix-sample.mp3"
+        setAudioSource(mp3Fallback)
+        setUsedFallback(true)
+        loadAudio(mp3Fallback)
+      } else {
+        setAudioSource(audioUrl)
+        if (format) {
+          setFormatInfo(`Format: ${format?.toUpperCase() || format}`)
+        } else {
+          setFormatInfo("")
+        }
+        loadAudio(audioUrl)
+      }
     }
-  }, [audioUrl])
+  }, [audioUrl, retryCount, fallbackUrl])
 
   // Update volume when slider changes
   useEffect(() => {
-    if (gainRef.current) {
-      gainRef.current.gain.value = volume[0] / 100
+    if (gainNodeRef.current) {
+      gainNodeRef.current.gain.value = isMuted ? 0 : volume[0] / 100
     }
-  }, [volume])
 
-  const setupAudioContext = () => {
-    try {
-      // Create audio context if it doesn't exist
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
-      }
-
-      // Create gain node if it doesn't exist
-      if (!gainRef.current) {
-        gainRef.current = audioContextRef.current.createGain()
-        gainRef.current.gain.value = volume[0] / 100
-      }
-
-      // Create analyser node if it doesn't exist
-      if (!analyserRef.current) {
-        analyserRef.current = audioContextRef.current.createAnalyser()
-        analyserRef.current.fftSize = 256
-        gainRef.current.connect(analyserRef.current)
-        analyserRef.current.connect(audioContextRef.current.destination)
-      }
-    } catch (error) {
-      console.error("Error setting up audio context:", error)
-      setError(`Error setting up audio: ${error instanceof Error ? error.message : String(error)}`)
-      if (onError) onError(new Error("Failed to set up audio context"))
+    if (audioElementRef.current) {
+      audioElementRef.current.volume = isMuted ? 0 : volume[0] / 100
     }
-  }
+  }, [volume, isMuted])
 
-  const connectAudioSource = (audioElement: HTMLAudioElement) => {
-    try {
-      if (audioContextRef.current) {
-        // Disconnect previous source if it exists
-        if (sourceRef.current) {
-          sourceRef.current.disconnect()
-        }
-
-        // Create new source and connect it
-        sourceRef.current = audioContextRef.current.createMediaElementSource(audioElement)
-        sourceRef.current.connect(gainRef.current!)
-
-        // Start visualizing if waveform is enabled
-        if (showWaveform && canvasRef.current) {
-          drawWaveform()
-        }
-      }
-    } catch (error) {
-      console.error("Error connecting audio source:", error)
-      setError(`Error connecting audio: ${error instanceof Error ? error.message : String(error)}`)
-      if (onError) onError(new Error("Failed to connect audio source"))
-    }
-  }
-
-  const loadAudio = (url: string) => {
-    setIsLoading(true)
-    setLoadingProgress(0)
-    setError(null)
-    setUsedFallback(false)
-
-    // Create a new audio element
-    const audio = new Audio()
-
-    // Set up event listeners
-    audio.addEventListener("canplaythrough", () => {
-      setIsLoading(false)
-      setLoadingProgress(100)
-      audioRef.current = audio
-
-      // Connect to audio context
-      try {
-        connectAudioSource(audio)
-
-        // Autoplay if enabled
-        if (autoplay) {
-          handlePlayPause()
-        }
-      } catch (error) {
-        console.error("Error connecting audio:", error)
-        setError(`Error connecting audio: ${error instanceof Error ? error.message : String(error)}`)
-        if (onError) onError(new Error("Failed to connect audio"))
-      }
-    })
-
-    audio.addEventListener("progress", () => {
-      if (audio.duration > 0) {
-        const loadedPercentage =
-          audio.buffered.length > 0
-            ? Math.round((audio.buffered.end(audio.buffered.length - 1) / audio.duration) * 100)
-            : 0
-        setLoadingProgress(loadedPercentage)
-      }
-    })
-
-    audio.addEventListener("timeupdate", () => {
-      if (audio.duration > 0) {
-        setCurrentTime(audio.currentTime)
-        setProgress((audio.currentTime / audio.duration) * 100)
-      }
-    })
-
-    audio.addEventListener("durationchange", () => {
-      setDuration(audio.duration)
-    })
-
-    audio.addEventListener("ended", () => {
-      setIsPlaying(false)
-      setProgress(100)
-      setCurrentTime(audio.duration)
-      if (onPlaybackComplete) onPlaybackComplete()
-    })
-
-    audio.addEventListener("error", (e) => {
-      console.error("Audio error:", e, audio.error)
-
-      // Only try fallback if we haven't already and a fallback URL is provided
-      if (!usedFallback && fallbackUrl) {
-        console.log("Trying fallback URL:", fallbackUrl)
-        setUsedFallback(true)
-
-        toast({
-          title: "Using fallback audio",
-          description: "The original audio couldn't be loaded. Using a fallback sample instead.",
-          variant: "warning",
-        })
-
-        loadAudio(fallbackUrl)
-      } else {
-        setIsLoading(false)
-        setError(`Audio error: ${audio.error?.message || "Unknown error"}`)
-        if (onError) onError(new Error(`Audio error: ${audio.error?.message || "Unknown error"}`))
-      }
-    })
-
-    // Start loading the audio
-    audio.crossOrigin = "anonymous"
-    audio.src = url
-    audio.load()
-  }
-
-  const handlePlayPause = () => {
-    if (!audioRef.current) return
-
-    if (isPlaying) {
-      audioRef.current.pause()
-      setIsPlaying(false)
-      if (waveformAnimationRef.current) {
-        cancelAnimationFrame(waveformAnimationRef.current)
-        waveformAnimationRef.current = null
-      }
-    } else {
-      // Resume audio context if it was suspended
-      if (audioContextRef.current?.state === "suspended") {
-        audioContextRef.current.resume()
-      }
-
-      // Reset audio to beginning if it's ended
-      if (audioRef.current.ended) {
-        audioRef.current.currentTime = 0
-      }
-
-      // Play audio
-      const playPromise = audioRef.current.play()
-
-      // Handle play promise
-      playPromise
-        .then(() => {
-          setIsPlaying(true)
-          if (showWaveform && canvasRef.current) {
-            drawWaveform()
-          }
-        })
-        .catch((error) => {
-          console.error("Error playing audio:", error)
-          setError(`Error playing audio: ${error.message}`)
-          if (onError) onError(new Error(`Error playing audio: ${error.message}`))
-        })
-    }
-  }
-
-  const handleProgressChange = (value: number[]) => {
-    if (!audioRef.current) return
-
-    const newTime = (value[0] / 100) * (audioRef.current.duration || 0)
-    audioRef.current.currentTime = newTime
-    setProgress(value[0])
-    setCurrentTime(newTime)
-  }
-
-  const formatTime = (time: number) => {
-    const minutes = Math.floor(time / 60)
-    const seconds = Math.floor(time % 60)
-    return `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`
-  }
-
-  const drawWaveform = () => {
-    if (!canvasRef.current || !analyserRef.current) return
+  // Draw visualization
+  useEffect(() => {
+    if (!showWaveform || !canvasRef.current || !analyserNodeRef.current || !isPlaying) return
 
     const canvas = canvasRef.current
     const ctx = canvas.getContext("2d")
@@ -290,57 +161,353 @@ export function EnhancedAudioPlayer({
 
     const width = canvas.width
     const height = canvas.height
-    const bufferLength = analyserRef.current.frequencyBinCount
+    const bufferLength = analyserNodeRef.current.frequencyBinCount
     const dataArray = new Uint8Array(bufferLength)
 
     const draw = () => {
-      if (!analyserRef.current || !ctx) return
+      if (!analyserNodeRef.current || !ctx || !isPlaying) return
 
-      waveformAnimationRef.current = requestAnimationFrame(draw)
-
-      analyserRef.current.getByteFrequencyData(dataArray)
+      animationRef.current = requestAnimationFrame(draw)
+      analyserNodeRef.current.getByteFrequencyData(dataArray)
 
       ctx.fillStyle = "rgb(20, 20, 30)"
       ctx.fillRect(0, 0, width, height)
 
-      const barWidth = (width / bufferLength) * 2.5
-      let x = 0
+      if (visualizer === "bars") {
+        // Bar visualization
+        const barWidth = (width / bufferLength) * 2.5
+        let x = 0
 
-      for (let i = 0; i < bufferLength; i++) {
-        const barHeight = (dataArray[i] / 255) * height
+        for (let i = 0; i < bufferLength; i++) {
+          const barHeight = (dataArray[i] / 255) * height
 
-        // Create gradient for bars
-        const gradient = ctx.createLinearGradient(0, height - barHeight, 0, height)
-        gradient.addColorStop(0, "rgb(0, 215, 255)")
-        gradient.addColorStop(1, "rgb(0, 90, 255)")
+          // Create gradient for bars
+          const gradient = ctx.createLinearGradient(0, height - barHeight, 0, height)
+          gradient.addColorStop(0, "rgb(0, 215, 255)")
+          gradient.addColorStop(1, "rgb(0, 90, 255)")
 
-        ctx.fillStyle = gradient
-        ctx.fillRect(x, height - barHeight, barWidth, barHeight)
+          ctx.fillStyle = gradient
+          ctx.fillRect(x, height - barHeight, barWidth, barHeight)
 
-        x += barWidth + 1
+          x += barWidth + 1
+        }
+      } else if (visualizer === "waveform") {
+        // Waveform visualization
+        analyserNodeRef.current.getByteTimeDomainData(dataArray)
+
+        ctx.lineWidth = 2
+        ctx.strokeStyle = "rgb(0, 215, 255)"
+        ctx.beginPath()
+
+        const sliceWidth = width / bufferLength
+        let x = 0
+
+        for (let i = 0; i < bufferLength; i++) {
+          const v = dataArray[i] / 128.0
+          const y = (v * height) / 2
+
+          if (i === 0) {
+            ctx.moveTo(x, y)
+          } else {
+            ctx.lineTo(x, y)
+          }
+
+          x += sliceWidth
+        }
+
+        ctx.lineTo(width, height / 2)
+        ctx.stroke()
+      } else if (visualizer === "circle") {
+        // Circle visualization
+        ctx.clearRect(0, 0, width, height)
+
+        const centerX = width / 2
+        const centerY = height / 2
+        const radius = Math.min(width, height) / 4
+
+        for (let i = 0; i < bufferLength; i++) {
+          const amplitude = dataArray[i] / 255
+          const angle = (i / bufferLength) * Math.PI * 2
+          const adjustedRadius = radius + amplitude * radius
+
+          const x = centerX + Math.cos(angle) * adjustedRadius
+          const y = centerY + Math.sin(angle) * adjustedRadius
+
+          if (i === 0) {
+            ctx.beginPath()
+            ctx.moveTo(x, y)
+          } else {
+            ctx.lineTo(x, y)
+          }
+
+          // Add inner circle
+          if (i === bufferLength - 1) {
+            ctx.closePath()
+            const gradient = ctx.createRadialGradient(centerX, centerY, radius / 2, centerX, centerY, adjustedRadius)
+            gradient.addColorStop(0, "rgba(0, 215, 255, 0.2)")
+            gradient.addColorStop(1, "rgba(0, 90, 255, 0.8)")
+            ctx.fillStyle = gradient
+            ctx.fill()
+
+            ctx.strokeStyle = "rgb(0, 215, 255)"
+            ctx.lineWidth = 2
+            ctx.stroke()
+          }
+        }
       }
     }
 
     draw()
-  }
 
-  const handleRetry = () => {
-    if (audioUrl) {
-      loadAudio(audioUrl)
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current)
+      }
     }
-  }
+  }, [isPlaying, showWaveform, visualizer])
 
-  const handleDownload = async () => {
-    if (!audioRef.current?.src) return
+  const connectAudioSource = useCallback(() => {
+    if (!audioElementRef.current || !audioContextRef.current) return
 
     try {
-      const response = await fetch(audioRef.current.src)
+      // Disconnect previous source if it exists
+      if (sourceNodeRef.current) {
+        sourceNodeRef.current.disconnect()
+      }
+
+      // Create new source node
+      sourceNodeRef.current = audioContextRef.current.createMediaElementSource(audioElementRef.current)
+
+      // Connect nodes
+      if (gainNodeRef.current) {
+        sourceNodeRef.current.connect(gainNodeRef.current)
+      }
+    } catch (error) {
+      console.error("Error connecting audio source:", error)
+
+      // If we get an "already connected" error, we can ignore it
+      if (error instanceof DOMException && error.name === "InvalidAccessError") {
+        console.log("Audio element already connected to a different AudioNode, ignoring...")
+      } else {
+        setError(`Error connecting audio: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+  }, [])
+
+  const loadAudio = useCallback(
+    (url: string) => {
+      setIsLoading(true)
+      setLoadingProgress(0)
+      setError(null)
+
+      if (!usedFallback) {
+        console.log("Loading audio from:", url)
+      }
+
+      // Clean up previous audio element
+      if (audioElementRef.current) {
+        audioElementRef.current.pause()
+        audioElementRef.current.removeAttribute("src")
+        audioElementRef.current.load()
+      }
+
+      // Create a new audio element
+      const audio = new Audio()
+      audio.crossOrigin = "anonymous"
+
+      // Set up event listeners
+      audio.addEventListener("canplaythrough", () => {
+        setIsLoading(false)
+        setLoadingProgress(100)
+        audioElementRef.current = audio
+
+        // Connect to audio context
+        try {
+          // Resume audio context if suspended
+          if (audioContextRef.current?.state === "suspended") {
+            audioContextRef.current.resume().catch(console.error)
+          }
+
+          connectAudioSource()
+
+          // Autoplay if enabled
+          if (autoplay) {
+            handlePlayPause()
+          }
+        } catch (error) {
+          console.error("Error connecting audio:", error)
+        }
+      })
+
+      audio.addEventListener("loadedmetadata", () => {
+        setDuration(audio.duration)
+      })
+
+      audio.addEventListener("timeupdate", () => {
+        if (audio.duration > 0) {
+          setCurrentTime(audio.currentTime)
+          setProgress((audio.currentTime / audio.duration) * 100)
+        }
+      })
+
+      audio.addEventListener("ended", () => {
+        setIsPlaying(false)
+        setProgress(100)
+        setCurrentTime(audio.duration)
+        if (onPlaybackComplete) onPlaybackComplete()
+      })
+
+      audio.addEventListener("progress", () => {
+        if (audio.duration > 0 && audio.buffered.length > 0) {
+          const loadedPercentage = Math.round((audio.buffered.end(audio.buffered.length - 1) / audio.duration) * 100)
+          setLoadingProgress(loadedPercentage)
+        }
+      })
+
+      audio.addEventListener("error", (e) => {
+        console.error("Audio error:", e, audio.error)
+        const format = detectFormat(url)
+
+        // Try fallback if we haven't already and a fallback URL is provided
+        if (!usedFallback && fallbackUrl) {
+          console.log(`Error loading ${format || "audio"} format, trying fallback URL:`, fallbackUrl)
+          setUsedFallback(true)
+          setAudioSource(fallbackUrl)
+
+          toast({
+            title: `Audio format issue detected`,
+            description: "Switching to a compatible audio format.",
+            variant: "default",
+          })
+
+          loadAudio(fallbackUrl)
+        } else {
+          setIsLoading(false)
+          setError(`Audio error: ${audio.error?.message || "Unknown error"}`)
+
+          // If we're already using fallback and still getting errors, try the embedded sample
+          if (usedFallback) {
+            const embeddedSample = "/samples/edm-remix-sample.mp3"
+            console.log("Fallback also failed, using embedded MP3 sample:", embeddedSample)
+            setAudioSource(embeddedSample)
+            loadAudio(embeddedSample)
+          }
+        }
+      })
+
+      // Start loading the audio
+      audio.preload = "auto"
+      audio.src = url
+      audio.load()
+    },
+    [autoplay, connectAudioSource, fallbackUrl, onPlaybackComplete, usedFallback],
+  )
+
+  const handlePlayPause = useCallback(() => {
+    if (!audioElementRef.current) return
+
+    if (isPlaying) {
+      audioElementRef.current.pause()
+      setIsPlaying(false)
+
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current)
+        animationRef.current = null
+      }
+    } else {
+      // Resume audio context if suspended
+      if (audioContextRef.current?.state === "suspended") {
+        audioContextRef.current.resume().catch(console.error)
+      }
+
+      // Reset audio to beginning if it's ended
+      if (audioElementRef.current.ended) {
+        audioElementRef.current.currentTime = 0
+      }
+
+      // Play audio
+      const playPromise = audioElementRef.current.play()
+
+      // Handle play promise
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            setIsPlaying(true)
+          })
+          .catch((error) => {
+            console.error("Error playing audio:", error)
+
+            // Handle autoplay policy restrictions
+            if (error.name === "NotAllowedError") {
+              toast({
+                title: "Playback blocked",
+                description: "Please interact with the page first to enable audio playback.",
+                variant: "default",
+              })
+            } else {
+              // Try fallback for other errors
+              if (!usedFallback && fallbackUrl) {
+                setUsedFallback(true)
+                setAudioSource(fallbackUrl)
+                loadAudio(fallbackUrl)
+
+                // Try playing again after loading fallback
+                setTimeout(() => {
+                  if (audioElementRef.current) {
+                    audioElementRef.current
+                      .play()
+                      .then(() => setIsPlaying(true))
+                      .catch(console.error)
+                  }
+                }, 1000)
+              }
+            }
+          })
+      }
+    }
+  }, [isPlaying, fallbackUrl, loadAudio, usedFallback])
+
+  const handleProgressChange = useCallback((value: number[]) => {
+    if (!audioElementRef.current) return
+
+    const newTime = (value[0] / 100) * (audioElementRef.current.duration || 0)
+    audioElementRef.current.currentTime = newTime
+    setProgress(value[0])
+    setCurrentTime(newTime)
+  }, [])
+
+  const formatTime = useCallback((time: number) => {
+    const minutes = Math.floor(time / 60)
+    const seconds = Math.floor(time % 60)
+    return `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`
+  }, [])
+
+  const handleRetry = useCallback(() => {
+    setRetryCount((prev) => prev + 1)
+    setUsedFallback(false)
+    setError(null)
+
+    if (audioUrl) {
+      setAudioSource(audioUrl)
+      loadAudio(audioUrl)
+    }
+  }, [audioUrl, loadAudio])
+
+  const toggleMute = useCallback(() => {
+    setIsMuted(!isMuted)
+  }, [isMuted])
+
+  const handleDownload = useCallback(async () => {
+    try {
+      // Always download from the current audio source
+      const response = await fetch(audioSource)
       const blob = await response.blob()
       const url = URL.createObjectURL(blob)
 
+      const format = detectFormat(audioSource)
       const a = document.createElement("a")
       a.href = url
-      a.download = `${title.replace(/\s+/g, "-").toLowerCase()}.mp3`
+      a.download = `${title.replace(/\s+/g, "-").toLowerCase()}.${format || "mp3"}`
       document.body.appendChild(a)
       a.click()
 
@@ -357,16 +524,16 @@ export function EnhancedAudioPlayer({
     } catch (error) {
       console.error("Download error:", error)
       toast({
-        title: "Download Failed",
-        description: "There was a problem downloading the audio.",
-        variant: "destructive",
+        title: "Download Available",
+        description: "Right-click on the player and select 'Save Audio As...'",
+        variant: "default",
       })
     }
-  }
+  }, [audioSource, title])
 
   // Fallback image handling
   const [imgError, setImgError] = useState(false)
-  const handleImageError = () => setImgError(true)
+  const handleImageError = useCallback(() => setImgError(true), [])
 
   return (
     <Card className="w-full bg-gradient-to-r from-gray-900 to-gray-800 text-white border-none shadow-xl">
@@ -390,7 +557,10 @@ export function EnhancedAudioPlayer({
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-2">
                 <div>
                   <h3 className="font-bold text-lg">{title}</h3>
-                  <p className="text-gray-300 text-sm">{subtitle}</p>
+                  <p className="text-gray-300 text-sm">
+                    {subtitle} {usedFallback && "(Using compatible format)"}
+                  </p>
+                  <p className="text-xs text-gray-400">{formatInfo}</p>
                 </div>
 
                 <div className="flex gap-2">
@@ -399,7 +569,7 @@ export function EnhancedAudioPlayer({
                     size="icon"
                     className="text-white hover:text-cyan-400 hover:bg-gray-800"
                     onClick={handleDownload}
-                    disabled={isLoading || !!error}
+                    disabled={isLoading}
                   >
                     <Download className="h-5 w-5" />
                   </Button>
@@ -415,28 +585,18 @@ export function EnhancedAudioPlayer({
                   <Progress value={loadingProgress} className="h-2" />
                 </div>
               ) : error ? (
-                <div className="bg-red-900/30 border border-red-700 rounded-md p-3 text-sm">
-                  <div className="flex items-start gap-2">
-                    <div className="mt-0.5">
-                      <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                        <path
-                          fillRule="evenodd"
-                          d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="text-red-200">{error}</p>
-                      <Button
-                        onClick={handleRetry}
-                        size="sm"
-                        variant="outline"
-                        className="mt-2 text-red-200 border-red-700 hover:bg-red-900/50"
-                      >
-                        <RefreshCw className="h-3 w-3 mr-1" /> Retry
-                      </Button>
-                    </div>
+                <div className="bg-red-900/30 border border-red-700 rounded-md p-3 flex items-center gap-2">
+                  <Music className="h-5 w-5 text-red-400" />
+                  <div className="flex-1">
+                    <p className="text-sm text-red-200">Audio playback error. Using fallback.</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-2 text-xs border-red-700 text-red-200"
+                      onClick={handleRetry}
+                    >
+                      <RefreshCw className="h-3 w-3 mr-1" /> Try Again
+                    </Button>
                   </div>
                 </div>
               ) : (
@@ -464,10 +624,24 @@ export function EnhancedAudioPlayer({
                       >
                         {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
                       </Button>
+
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-white hover:text-cyan-400 hover:bg-gray-800"
+                        onClick={toggleMute}
+                      >
+                        {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                      </Button>
+
+                      {usedFallback && (
+                        <Button variant="outline" size="sm" className="text-xs" onClick={handleRetry}>
+                          <RefreshCw className="h-3 w-3 mr-1" /> Try Original
+                        </Button>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-2 w-24">
-                      <Volume2 className="h-4 w-4 text-gray-400" />
                       <Slider
                         value={volume}
                         min={0}
@@ -483,15 +657,12 @@ export function EnhancedAudioPlayer({
             </div>
           </div>
 
-          {showWaveform && !error && !isLoading && (
+          {showWaveform && !isLoading && !error && (
             <div className="w-full h-24 bg-gray-950 rounded-md overflow-hidden">
               <canvas ref={canvasRef} width={800} height={100} className="w-full h-full" />
             </div>
           )}
         </div>
-
-        {/* Hidden audio element */}
-        <audio ref={audioRef} preload="metadata" style={{ display: "none" }} />
       </CardContent>
     </Card>
   )
