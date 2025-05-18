@@ -1,14 +1,28 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
-import { Play, Pause, Volume2, VolumeX, Download, RefreshCw, Music } from "lucide-react"
+import { Play, Pause, Volume2, VolumeX, Download, RefreshCw, Music, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Card, CardContent } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { toast } from "@/hooks/use-toast"
 import { detectFormat, isFormatSupported } from "@/lib/audio-engine"
-import type { AudioPlayerProps } from "@/types/audio"
+import { getGuaranteedFallback } from "@/lib/audio-format-handler"
+
+export interface AudioPlayerProps {
+  audioUrl: string
+  fallbackUrl?: string
+  title?: string
+  subtitle?: string
+  imageUrl?: string
+  onPlaybackComplete?: () => void
+  onError?: (error: Error) => void
+  showWaveform?: boolean
+  autoplay?: boolean
+  visualizer?: "bars" | "waveform" | "circle"
+  genre?: string
+}
 
 export function EnhancedAudioPlayer({
   audioUrl,
@@ -21,6 +35,7 @@ export function EnhancedAudioPlayer({
   showWaveform = true,
   autoplay = false,
   visualizer = "bars",
+  genre = "edm",
 }: AudioPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -35,6 +50,7 @@ export function EnhancedAudioPlayer({
   const [audioSource, setAudioSource] = useState<string>(audioUrl)
   const [formatInfo, setFormatInfo] = useState<string>("")
   const [error, setError] = useState<string | null>(null)
+  const [emergencyMode, setEmergencyMode] = useState(false)
 
   const audioElementRef = useRef<HTMLAudioElement | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -43,6 +59,8 @@ export function EnhancedAudioPlayer({
   const analyserNodeRef = useRef<AnalyserNode | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const animationRef = useRef<number | null>(null)
+  const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // Initialize audio context and nodes
   const initAudioContext = useCallback(() => {
@@ -74,6 +92,292 @@ export function EnhancedAudioPlayer({
     }
   }, [volume])
 
+  const connectAudioSource = useCallback(() => {
+    if (!audioElementRef.current || !audioContextRef.current) return
+
+    try {
+      // Disconnect previous source if it exists
+      if (sourceNodeRef.current) {
+        sourceNodeRef.current.disconnect()
+      }
+
+      // Create new source node
+      sourceNodeRef.current = audioContextRef.current.createMediaElementSource(audioElementRef.current)
+
+      // Connect nodes
+      if (gainNodeRef.current) {
+        sourceNodeRef.current.connect(gainNodeRef.current)
+      }
+    } catch (error) {
+      console.error("Error connecting audio source:", error)
+
+      // If we get an "already connected" error, we can ignore it
+      if (error instanceof DOMException && error.name === "InvalidAccessError") {
+        console.log("Audio element already connected to a different AudioNode, ignoring...")
+      } else {
+        setError(`Error connecting audio: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+  }, [])
+
+  const loadAudio = useCallback(
+    (url: string) => {
+      setIsLoading(true)
+      setLoadingProgress(0)
+      setError(null)
+
+      if (!usedFallback) {
+        console.log("Loading audio from:", url)
+      }
+
+      // Clean up previous audio element
+      if (audioElementRef.current) {
+        audioElementRef.current.pause()
+        audioElementRef.current.removeAttribute("src")
+        audioElementRef.current.load()
+      }
+
+      // Clear any existing timeouts
+      if (loadTimeoutRef.current) {
+        clearTimeout(loadTimeoutRef.current)
+      }
+
+      // Set a timeout to detect if loading takes too long
+      loadTimeoutRef.current = setTimeout(() => {
+        console.warn("Audio loading timeout - switching to emergency mode")
+
+        // If we're already in emergency mode or using fallback, use the guaranteed fallback
+        if (emergencyMode || usedFallback) {
+          const guaranteedFallback = getGuaranteedFallback(genre)
+          console.log("Using guaranteed fallback:", guaranteedFallback)
+          setAudioSource(guaranteedFallback)
+          setUsedFallback(true)
+          loadAudio(guaranteedFallback)
+        } else {
+          // Try fallback if available
+          if (fallbackUrl) {
+            console.log("Loading timeout - trying fallback URL:", fallbackUrl)
+            setUsedFallback(true)
+            setAudioSource(fallbackUrl)
+            setEmergencyMode(true)
+            loadAudio(fallbackUrl)
+          } else {
+            // Use guaranteed fallback as last resort
+            const guaranteedFallback = getGuaranteedFallback(genre)
+            console.log("Using guaranteed fallback:", guaranteedFallback)
+            setAudioSource(guaranteedFallback)
+            setUsedFallback(true)
+            setEmergencyMode(true)
+            loadAudio(guaranteedFallback)
+          }
+        }
+      }, 10000) // 10 second timeout
+
+      // Create a new audio element
+      const audio = new Audio()
+      audio.crossOrigin = "anonymous"
+
+      // Set up event listeners
+      audio.addEventListener("canplaythrough", () => {
+        // Clear the timeout since loading succeeded
+        if (loadTimeoutRef.current) {
+          clearTimeout(loadTimeoutRef.current)
+          loadTimeoutRef.current = null
+        }
+
+        setIsLoading(false)
+        setLoadingProgress(100)
+        audioElementRef.current = audio
+
+        // Connect to audio context
+        try {
+          // Resume audio context if suspended
+          if (audioContextRef.current?.state === "suspended") {
+            audioContextRef.current.resume().catch(console.error)
+          }
+
+          connectAudioSource()
+
+          // Autoplay if enabled
+          if (autoplay) {
+            // Play directly instead of using handlePlayPause to avoid circular reference
+            if (audioContextRef.current?.state === "suspended") {
+              audioContextRef.current.resume().catch(console.error)
+            }
+
+            audio
+              .play()
+              .then(() => setIsPlaying(true))
+              .catch(console.error)
+          }
+        } catch (error) {
+          console.error("Error connecting audio:", error)
+        }
+      })
+
+      audio.addEventListener("loadedmetadata", () => {
+        setDuration(audio.duration)
+      })
+
+      audio.addEventListener("timeupdate", () => {
+        if (audio.duration > 0) {
+          setCurrentTime(audio.currentTime)
+          setProgress((audio.currentTime / audio.duration) * 100)
+        }
+      })
+
+      audio.addEventListener("ended", () => {
+        setIsPlaying(false)
+        setProgress(100)
+        setCurrentTime(audio.duration)
+        if (onPlaybackComplete) onPlaybackComplete()
+      })
+
+      audio.addEventListener("progress", () => {
+        if (audio.duration > 0 && audio.buffered.length > 0) {
+          const loadedPercentage = Math.round((audio.buffered.end(audio.buffered.length - 1) / audio.duration) * 100)
+          setLoadingProgress(loadedPercentage)
+        }
+      })
+
+      audio.addEventListener("error", (e) => {
+        console.error("Audio error:", e, audio.error)
+
+        // Clear the timeout since we got an error
+        if (loadTimeoutRef.current) {
+          clearTimeout(loadTimeoutRef.current)
+          loadTimeoutRef.current = null
+        }
+
+        const format = detectFormat(url)
+
+        // If we're already in emergency mode, go straight to guaranteed fallback
+        if (emergencyMode) {
+          const guaranteedFallback = getGuaranteedFallback(genre)
+          console.log("Emergency mode - using guaranteed fallback:", guaranteedFallback)
+          setAudioSource(guaranteedFallback)
+          setUsedFallback(true)
+          loadAudio(guaranteedFallback)
+          return
+        }
+
+        // Try fallback if we haven't already and a fallback URL is provided
+        if (!usedFallback && fallbackUrl) {
+          console.log(`Error loading ${format || "audio"} format, trying fallback URL:`, fallbackUrl)
+          setUsedFallback(true)
+          setAudioSource(fallbackUrl)
+
+          toast({
+            title: `Audio format issue detected`,
+            description: "Switching to a compatible audio format.",
+            variant: "default",
+          })
+
+          loadAudio(fallbackUrl)
+        } else {
+          setIsLoading(false)
+          setError(`Audio error: ${audio.error?.message || "Unknown error"}`)
+
+          // If we're already using fallback and still getting errors, try the guaranteed fallback
+          if (usedFallback) {
+            const guaranteedFallback = getGuaranteedFallback(genre)
+            console.log("Fallback also failed, using guaranteed fallback:", guaranteedFallback)
+            setAudioSource(guaranteedFallback)
+            setEmergencyMode(true)
+            loadAudio(guaranteedFallback)
+          }
+        }
+      })
+
+      // Start loading the audio
+      audio.preload = "auto"
+      audio.src = url
+      audio.load()
+    },
+    [autoplay, connectAudioSource, fallbackUrl, onPlaybackComplete, usedFallback, emergencyMode, genre],
+  )
+
+  // Now define handlePlayPause after loadAudio is defined
+  const handlePlayPause = useCallback(() => {
+    if (!audioElementRef.current) return
+
+    if (isPlaying) {
+      audioElementRef.current.pause()
+      setIsPlaying(false)
+
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current)
+        animationRef.current = null
+      }
+    } else {
+      // Resume audio context if suspended
+      if (audioContextRef.current?.state === "suspended") {
+        audioContextRef.current.resume().catch(console.error)
+      }
+
+      // Reset audio to beginning if it's ended
+      if (audioElementRef.current.ended) {
+        audioElementRef.current.currentTime = 0
+      }
+
+      // Play audio
+      const playPromise = audioElementRef.current.play()
+
+      // Handle play promise
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            setIsPlaying(true)
+          })
+          .catch((error) => {
+            console.error("Error playing audio:", error)
+
+            // Handle autoplay policy restrictions
+            if (error.name === "NotAllowedError") {
+              toast({
+                title: "Playback blocked",
+                description: "Please interact with the page first to enable audio playback.",
+                variant: "default",
+              })
+            } else {
+              // Try fallback for other errors
+              if (!usedFallback && fallbackUrl) {
+                setUsedFallback(true)
+                setAudioSource(fallbackUrl)
+                loadAudio(fallbackUrl)
+
+                // Try playing again after loading fallback
+                setTimeout(() => {
+                  if (audioElementRef.current) {
+                    audioElementRef.current
+                      .play()
+                      .then(() => setIsPlaying(true))
+                      .catch(console.error)
+                  }
+                }, 1000)
+              } else if (usedFallback) {
+                // If already using fallback, try guaranteed fallback
+                const guaranteedFallback = getGuaranteedFallback(genre)
+                setAudioSource(guaranteedFallback)
+                setEmergencyMode(true)
+                loadAudio(guaranteedFallback)
+
+                // Try playing again after loading guaranteed fallback
+                setTimeout(() => {
+                  if (audioElementRef.current) {
+                    audioElementRef.current
+                      .play()
+                      .then(() => setIsPlaying(true))
+                      .catch(console.error)
+                  }
+                }, 1000)
+              }
+            }
+          })
+      }
+    }
+  }, [isPlaying, fallbackUrl, usedFallback, genre, emergencyMode])
+
   // Initialize audio element
   useEffect(() => {
     initAudioContext()
@@ -101,17 +405,37 @@ export function EnhancedAudioPlayer({
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current)
       }
+
+      if (loadTimeoutRef.current) {
+        clearTimeout(loadTimeoutRef.current)
+      }
+
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current)
+      }
     }
   }, [initAudioContext])
 
   // Load audio when URL changes or on retry
   useEffect(() => {
+    if (!audioUrl && !fallbackUrl) return
+
+    // If we have no audio URL but have a fallback, use the fallback immediately
+    if (!audioUrl && fallbackUrl) {
+      setAudioSource(fallbackUrl)
+      setUsedFallback(true)
+      loadAudio(fallbackUrl)
+      return
+    }
+
+    // If we have an audio URL, try to load it
     if (audioUrl) {
       const format = detectFormat(audioUrl)
 
-      if (format && !isFormatSupported(format)) {
-        console.log(`Format ${format} is not supported in this browser. Using fallback.`)
-        setFormatInfo(`${format?.toUpperCase() || "Format"} not supported in this browser`)
+      // If format detection fails or format is not supported, use fallback
+      if (!format || (format && !isFormatSupported(format))) {
+        console.log(`Format ${format || "unknown"} is not supported in this browser. Using fallback.`)
+        setFormatInfo(`${format ? format.toUpperCase() : "Unknown format"} not supported in this browser`)
 
         if (fallbackUrl) {
           const fallbackFormat = detectFormat(fallbackUrl)
@@ -123,22 +447,22 @@ export function EnhancedAudioPlayer({
           }
         }
 
-        // If fallback also not supported, use MP3 fallback
-        const mp3Fallback = "/samples/edm-remix-sample.mp3"
-        setAudioSource(mp3Fallback)
+        // If fallback also not supported, use guaranteed MP3 fallback
+        const guaranteedFallback = getGuaranteedFallback(genre)
+        setAudioSource(guaranteedFallback)
         setUsedFallback(true)
-        loadAudio(mp3Fallback)
+        loadAudio(guaranteedFallback)
       } else {
         setAudioSource(audioUrl)
         if (format) {
-          setFormatInfo(`Format: ${format?.toUpperCase() || format}`)
+          setFormatInfo(`Format: ${format.toUpperCase()}`)
         } else {
           setFormatInfo("")
         }
         loadAudio(audioUrl)
       }
     }
-  }, [audioUrl, retryCount, fallbackUrl])
+  }, [audioUrl, retryCount, fallbackUrl, genre])
 
   // Update volume when slider changes
   useEffect(() => {
@@ -266,207 +590,6 @@ export function EnhancedAudioPlayer({
     }
   }, [isPlaying, showWaveform, visualizer])
 
-  const connectAudioSource = useCallback(() => {
-    if (!audioElementRef.current || !audioContextRef.current) return
-
-    try {
-      // Disconnect previous source if it exists
-      if (sourceNodeRef.current) {
-        sourceNodeRef.current.disconnect()
-      }
-
-      // Create new source node
-      sourceNodeRef.current = audioContextRef.current.createMediaElementSource(audioElementRef.current)
-
-      // Connect nodes
-      if (gainNodeRef.current) {
-        sourceNodeRef.current.connect(gainNodeRef.current)
-      }
-    } catch (error) {
-      console.error("Error connecting audio source:", error)
-
-      // If we get an "already connected" error, we can ignore it
-      if (error instanceof DOMException && error.name === "InvalidAccessError") {
-        console.log("Audio element already connected to a different AudioNode, ignoring...")
-      } else {
-        setError(`Error connecting audio: ${error instanceof Error ? error.message : String(error)}`)
-      }
-    }
-  }, [])
-
-  const loadAudio = useCallback(
-    (url: string) => {
-      setIsLoading(true)
-      setLoadingProgress(0)
-      setError(null)
-
-      if (!usedFallback) {
-        console.log("Loading audio from:", url)
-      }
-
-      // Clean up previous audio element
-      if (audioElementRef.current) {
-        audioElementRef.current.pause()
-        audioElementRef.current.removeAttribute("src")
-        audioElementRef.current.load()
-      }
-
-      // Create a new audio element
-      const audio = new Audio()
-      audio.crossOrigin = "anonymous"
-
-      // Set up event listeners
-      audio.addEventListener("canplaythrough", () => {
-        setIsLoading(false)
-        setLoadingProgress(100)
-        audioElementRef.current = audio
-
-        // Connect to audio context
-        try {
-          // Resume audio context if suspended
-          if (audioContextRef.current?.state === "suspended") {
-            audioContextRef.current.resume().catch(console.error)
-          }
-
-          connectAudioSource()
-
-          // Autoplay if enabled
-          if (autoplay) {
-            handlePlayPause()
-          }
-        } catch (error) {
-          console.error("Error connecting audio:", error)
-        }
-      })
-
-      audio.addEventListener("loadedmetadata", () => {
-        setDuration(audio.duration)
-      })
-
-      audio.addEventListener("timeupdate", () => {
-        if (audio.duration > 0) {
-          setCurrentTime(audio.currentTime)
-          setProgress((audio.currentTime / audio.duration) * 100)
-        }
-      })
-
-      audio.addEventListener("ended", () => {
-        setIsPlaying(false)
-        setProgress(100)
-        setCurrentTime(audio.duration)
-        if (onPlaybackComplete) onPlaybackComplete()
-      })
-
-      audio.addEventListener("progress", () => {
-        if (audio.duration > 0 && audio.buffered.length > 0) {
-          const loadedPercentage = Math.round((audio.buffered.end(audio.buffered.length - 1) / audio.duration) * 100)
-          setLoadingProgress(loadedPercentage)
-        }
-      })
-
-      audio.addEventListener("error", (e) => {
-        console.error("Audio error:", e, audio.error)
-        const format = detectFormat(url)
-
-        // Try fallback if we haven't already and a fallback URL is provided
-        if (!usedFallback && fallbackUrl) {
-          console.log(`Error loading ${format || "audio"} format, trying fallback URL:`, fallbackUrl)
-          setUsedFallback(true)
-          setAudioSource(fallbackUrl)
-
-          toast({
-            title: `Audio format issue detected`,
-            description: "Switching to a compatible audio format.",
-            variant: "default",
-          })
-
-          loadAudio(fallbackUrl)
-        } else {
-          setIsLoading(false)
-          setError(`Audio error: ${audio.error?.message || "Unknown error"}`)
-
-          // If we're already using fallback and still getting errors, try the embedded sample
-          if (usedFallback) {
-            const embeddedSample = "/samples/edm-remix-sample.mp3"
-            console.log("Fallback also failed, using embedded MP3 sample:", embeddedSample)
-            setAudioSource(embeddedSample)
-            loadAudio(embeddedSample)
-          }
-        }
-      })
-
-      // Start loading the audio
-      audio.preload = "auto"
-      audio.src = url
-      audio.load()
-    },
-    [autoplay, connectAudioSource, fallbackUrl, onPlaybackComplete, usedFallback],
-  )
-
-  const handlePlayPause = useCallback(() => {
-    if (!audioElementRef.current) return
-
-    if (isPlaying) {
-      audioElementRef.current.pause()
-      setIsPlaying(false)
-
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current)
-        animationRef.current = null
-      }
-    } else {
-      // Resume audio context if suspended
-      if (audioContextRef.current?.state === "suspended") {
-        audioContextRef.current.resume().catch(console.error)
-      }
-
-      // Reset audio to beginning if it's ended
-      if (audioElementRef.current.ended) {
-        audioElementRef.current.currentTime = 0
-      }
-
-      // Play audio
-      const playPromise = audioElementRef.current.play()
-
-      // Handle play promise
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => {
-            setIsPlaying(true)
-          })
-          .catch((error) => {
-            console.error("Error playing audio:", error)
-
-            // Handle autoplay policy restrictions
-            if (error.name === "NotAllowedError") {
-              toast({
-                title: "Playback blocked",
-                description: "Please interact with the page first to enable audio playback.",
-                variant: "default",
-              })
-            } else {
-              // Try fallback for other errors
-              if (!usedFallback && fallbackUrl) {
-                setUsedFallback(true)
-                setAudioSource(fallbackUrl)
-                loadAudio(fallbackUrl)
-
-                // Try playing again after loading fallback
-                setTimeout(() => {
-                  if (audioElementRef.current) {
-                    audioElementRef.current
-                      .play()
-                      .then(() => setIsPlaying(true))
-                      .catch(console.error)
-                  }
-                }, 1000)
-              }
-            }
-          })
-      }
-    }
-  }, [isPlaying, fallbackUrl, loadAudio, usedFallback])
-
   const handleProgressChange = useCallback((value: number[]) => {
     if (!audioElementRef.current) return
 
@@ -486,12 +609,59 @@ export function EnhancedAudioPlayer({
     setRetryCount((prev) => prev + 1)
     setUsedFallback(false)
     setError(null)
+    setEmergencyMode(false)
 
+    // Clear any existing retry timeout
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current)
+    }
+
+    // If original URL is available, try it again
     if (audioUrl) {
       setAudioSource(audioUrl)
       loadAudio(audioUrl)
+
+      // Set a timeout to fall back to guaranteed fallback if retry fails
+      retryTimeoutRef.current = setTimeout(() => {
+        if (isLoading) {
+          console.log("Retry timeout - using guaranteed fallback")
+          const guaranteedFallback = getGuaranteedFallback(genre)
+          setAudioSource(guaranteedFallback)
+          setUsedFallback(true)
+          setEmergencyMode(true)
+          loadAudio(guaranteedFallback)
+        }
+      }, 5000) // 5 second timeout for retry
+    } else if (fallbackUrl) {
+      // If no original URL but fallback is available, try fallback
+      setAudioSource(fallbackUrl)
+      setUsedFallback(true)
+      loadAudio(fallbackUrl)
+    } else {
+      // Last resort - use guaranteed fallback
+      const guaranteedFallback = getGuaranteedFallback(genre)
+      setAudioSource(guaranteedFallback)
+      setUsedFallback(true)
+      setEmergencyMode(true)
+      loadAudio(guaranteedFallback)
     }
-  }, [audioUrl, loadAudio])
+  }, [audioUrl, fallbackUrl, loadAudio, genre, isLoading])
+
+  const handleEmergencyFallback = useCallback(() => {
+    // Force use of guaranteed fallback
+    const guaranteedFallback = getGuaranteedFallback(genre)
+    console.log("Emergency fallback activated:", guaranteedFallback)
+    setAudioSource(guaranteedFallback)
+    setUsedFallback(true)
+    setEmergencyMode(true)
+    loadAudio(guaranteedFallback)
+
+    toast({
+      title: "Emergency fallback activated",
+      description: "Using guaranteed working audio sample.",
+      variant: "default",
+    })
+  }, [genre, loadAudio])
 
   const toggleMute = useCallback(() => {
     setIsMuted(!isMuted)
@@ -559,6 +729,7 @@ export function EnhancedAudioPlayer({
                   <h3 className="font-bold text-lg">{title}</h3>
                   <p className="text-gray-300 text-sm">
                     {subtitle} {usedFallback && "(Using compatible format)"}
+                    {emergencyMode && " - Emergency Mode"}
                   </p>
                   <p className="text-xs text-gray-400">{formatInfo}</p>
                 </div>
@@ -583,20 +754,34 @@ export function EnhancedAudioPlayer({
                     <span>{loadingProgress}%</span>
                   </div>
                   <Progress value={loadingProgress} className="h-2" />
+
+                  {/* Emergency fallback button if loading takes too long */}
+                  {loadingProgress === 0 && (
+                    <Button variant="destructive" size="sm" className="mt-2 w-full" onClick={handleEmergencyFallback}>
+                      <AlertTriangle className="h-3 w-3 mr-1" />
+                      Force Emergency Fallback
+                    </Button>
+                  )}
                 </div>
               ) : error ? (
                 <div className="bg-red-900/30 border border-red-700 rounded-md p-3 flex items-center gap-2">
                   <Music className="h-5 w-5 text-red-400" />
                   <div className="flex-1">
                     <p className="text-sm text-red-200">Audio playback error. Using fallback.</p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-2 text-xs border-red-700 text-red-200"
-                      onClick={handleRetry}
-                    >
-                      <RefreshCw className="h-3 w-3 mr-1" /> Try Again
-                    </Button>
+                    <div className="flex gap-2 mt-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs border-red-700 text-red-200"
+                        onClick={handleRetry}
+                      >
+                        <RefreshCw className="h-3 w-3 mr-1" /> Try Again
+                      </Button>
+
+                      <Button variant="destructive" size="sm" className="text-xs" onClick={handleEmergencyFallback}>
+                        <AlertTriangle className="h-3 w-3 mr-1" /> Emergency Fallback
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -634,7 +819,7 @@ export function EnhancedAudioPlayer({
                         {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
                       </Button>
 
-                      {usedFallback && (
+                      {(usedFallback || emergencyMode) && (
                         <Button variant="outline" size="sm" className="text-xs" onClick={handleRetry}>
                           <RefreshCw className="h-3 w-3 mr-1" /> Try Original
                         </Button>

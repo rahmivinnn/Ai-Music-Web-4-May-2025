@@ -4,35 +4,17 @@
  * Props for the EnhancedAudioPlayer component
  */
 export interface AudioPlayerProps {
-  /** URL of the audio file to play */
   audioUrl: string
-
-  /** Optional fallback URL if the primary URL fails to load */
   fallbackUrl?: string
-
-  /** Title to display for the audio track */
   title?: string
-
-  /** Subtitle or description for the audio track */
   subtitle?: string
-
-  /** URL of an image to display with the audio player */
   imageUrl?: string
-
-  /** Callback function triggered when playback completes */
   onPlaybackComplete?: () => void
-
-  /** Callback function triggered when an error occurs */
   onError?: (error: Error) => void
-
-  /** Whether to show the audio waveform visualization */
   showWaveform?: boolean
-
-  /** Whether to automatically play the audio when loaded */
   autoplay?: boolean
-
-  /** Type of visualizer to use: 'bars', 'waveform', or 'circle' */
   visualizer?: "bars" | "waveform" | "circle"
+  genre?: string
 }
 
 /**
@@ -76,4 +58,15 @@ export interface AudioGenerationParams {
 
   /** Processing options for the generated audio */
   processing?: AudioProcessingOptions
+}
+
+export interface AudioFormat {
+  extension: string
+  mimeType: string
+  browserSupport: {
+    chrome: boolean
+    firefox: boolean
+    safari: boolean
+    edge: boolean
+  }
 }

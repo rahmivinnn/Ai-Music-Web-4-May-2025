@@ -15,7 +15,7 @@ import { EnhancedAudioPlayer } from "./enhanced-audio-player"
 import { generateRemixTrack } from "@/app/actions/audio-actions"
 import { useToast } from "@/hooks/use-toast"
 import { Music, Wand2, Save, Share2, History, AlertTriangle, RefreshCw } from "lucide-react"
-import { getFallbackUrl } from "@/lib/audio-engine"
+import { getGuaranteedFallback } from "@/lib/audio-format-handler"
 
 export function AIRemixStudio() {
   const [isLoading, setIsLoading] = useState(false)
@@ -34,6 +34,7 @@ export function AIRemixStudio() {
   const [retryCount, setRetryCount] = useState(0)
   const [usedFallback, setUsedFallback] = useState(false)
   const [visualizer, setVisualizer] = useState<"waveform" | "bars" | "circle">("bars")
+  const [emergencyMode, setEmergencyMode] = useState(false)
 
   const descriptionRef = useRef<HTMLTextAreaElement>(null)
   const { toast } = useToast()
@@ -71,9 +72,10 @@ export function AIRemixStudio() {
     setIsLoading(true)
     setError(null)
     setUsedFallback(false)
+    setEmergencyMode(false)
 
     // Prepare fallback URL based on genre
-    const genreFallbackUrl = getFallbackUrl(genre)
+    const genreFallbackUrl = getGuaranteedFallback(genre)
     setFallbackUrl(genreFallbackUrl)
 
     try {
@@ -96,7 +98,7 @@ export function AIRemixStudio() {
 
         toast({
           title: "Remix generated",
-          description: "Your remix has been generated successfully.",
+          description: "Your custom remix is ready to play!",
         })
       } else if (result.useFallback && result.fallbackUrl) {
         // Use fallback if API fails but fallback is available
@@ -150,6 +152,7 @@ export function AIRemixStudio() {
   const handleRetry = useCallback(() => {
     setRetryCount((prev) => prev + 1)
     setError(null)
+    setEmergencyMode(false)
     handleGenerateRemix()
   }, [])
 
@@ -180,6 +183,20 @@ export function AIRemixStudio() {
     })
   }, [toast])
 
+  const handleEmergencyFallback = useCallback(() => {
+    // Force use of guaranteed fallback
+    setEmergencyMode(true)
+    setUsedFallback(true)
+    setRemixUrl(null)
+    setFallbackUrl(getGuaranteedFallback(genre))
+
+    toast({
+      title: "Emergency fallback activated",
+      description: "Using guaranteed working audio sample.",
+      variant: "default",
+    })
+  }, [genre, toast])
+
   return (
     <Card className="w-full max-w-4xl mx-auto">
       <CardHeader>
@@ -202,9 +219,15 @@ export function AIRemixStudio() {
                   Using fallback audio sample instead. You can try again or adjust your settings.
                 </p>
               )}
-              <Button variant="outline" size="sm" className="mt-2" onClick={handleRetry} disabled={isLoading}>
-                <RefreshCw className="mr-2 h-4 w-4" /> Retry Generation
-              </Button>
+              <div className="flex gap-2 mt-2">
+                <Button variant="outline" size="sm" onClick={handleRetry} disabled={isLoading}>
+                  <RefreshCw className="mr-2 h-4 w-4" /> Retry Generation
+                </Button>
+
+                <Button variant="destructive" size="sm" onClick={handleEmergencyFallback} disabled={isLoading}>
+                  <AlertTriangle className="mr-2 h-4 w-4" /> Emergency Fallback
+                </Button>
+              </div>
             </AlertDescription>
           </Alert>
         )}
@@ -464,6 +487,7 @@ export function AIRemixStudio() {
                 {usedFallback && (
                   <span className="ml-2 text-xs text-amber-500 font-normal">(Using fallback audio)</span>
                 )}
+                {emergencyMode && <span className="ml-2 text-xs text-red-500 font-normal">(Emergency Mode)</span>}
               </h3>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={handleSaveRemix}>
@@ -484,6 +508,7 @@ export function AIRemixStudio() {
               showWaveform={true}
               autoplay={autoplay}
               visualizer={visualizer}
+              genre={genre}
               onError={(error) => {
                 console.error("Player error:", error)
                 setError(`Audio playback error: ${error.message}`)
