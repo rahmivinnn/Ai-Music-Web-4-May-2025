@@ -6,6 +6,7 @@ import { Music, Wand2, Heart, Play, Pause, Download, Shuffle, Volume2, RefreshCw
 import { Button } from "@/components/ui/button"
 import { PersistentAivaIntegration } from "@/components/persistent-aiva-integration"
 import { useToast } from "@/components/ui/use-toast"
+import { HomePopupManager } from "@/components/home-popup-manager"
 
 export default function HomePage() {
   const [playingTrackId, setPlayingTrackId] = useState<number | null>(null)
@@ -864,6 +865,7 @@ export default function HomePage() {
           ))}
         </div>
       </div>
+      <HomePopupManager />
     </div>
   )
 }
