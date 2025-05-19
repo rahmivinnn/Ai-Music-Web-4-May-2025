@@ -1,6 +1,9 @@
 import { AIRemixStudio } from "@/components/ai-remix-studio"
+import { EnhancedAudioPlayer } from "@/components/enhanced-audio-player"
 
 export default function RemixPage() {
+  const audioUrl = "" // Replace with actual audio URL if available
+
   return (
     <div className="container mx-auto py-8 px-4">
       <div className="max-w-4xl mx-auto space-y-8">
@@ -13,6 +16,10 @@ export default function RemixPage() {
         </div>
 
         <AIRemixStudio />
+
+        {audioUrl && (
+          <EnhancedAudioPlayer audioUrl={audioUrl} fallbackUrl="/samples/edm-remix-sample.mp3" genre="edm" />
+        )}
 
         <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-4 text-sm">
           <h3 className="font-medium mb-2">Tips for Great Remixes</h3>

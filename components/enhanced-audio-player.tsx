@@ -250,6 +250,25 @@ export function EnhancedAudioPlayer({
         }
 
         const format = detectFormat(url)
+        const errorMessage = audio.error?.message || "Unknown error"
+
+        // Check for demuxer errors specifically
+        const isDemuxerError =
+          e.toString().includes("DEMUXER_ERROR") ||
+          errorMessage.includes("DEMUXER_ERROR") ||
+          errorMessage.includes("could not open")
+
+        // If we have a demuxer error, go straight to guaranteed fallback
+        if (isDemuxerError) {
+          console.warn("Demuxer error detected - switching to guaranteed fallback immediately")
+          const guaranteedFallback = getGuaranteedFallback(genre)
+          console.log("Using guaranteed fallback:", guaranteedFallback)
+          setAudioSource(guaranteedFallback)
+          setUsedFallback(true)
+          setEmergencyMode(true)
+          loadAudio(guaranteedFallback)
+          return
+        }
 
         // If we're already in emergency mode, go straight to guaranteed fallback
         if (emergencyMode) {
@@ -276,7 +295,7 @@ export function EnhancedAudioPlayer({
           loadAudio(fallbackUrl)
         } else {
           setIsLoading(false)
-          setError(`Audio error: ${audio.error?.message || "Unknown error"}`)
+          setError(`Audio error: ${errorMessage}`)
 
           // If we're already using fallback and still getting errors, try the guaranteed fallback
           if (usedFallback) {
