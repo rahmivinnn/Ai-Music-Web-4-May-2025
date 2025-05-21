@@ -415,8 +415,11 @@ export async function generateRemix({ prompt, genre, bpm, quality = "high" }: Ri
       guidance: 7.5
     })
 
+    // Ensure the audio URL is a valid, browser-compatible format (e.g., .mp3)
+    const audioUrl = result.audio_url.endsWith('.mp3') ? result.audio_url : result.audio_url + '.mp3'
+
     return {
-      audioUrl: result.audio_url,
+      audioUrl,
       success: true,
       genre,
       bpm,
