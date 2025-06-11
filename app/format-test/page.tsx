@@ -1,6 +1,8 @@
+"use client"
+
 import dynamic from "next/dynamic"
 
-const FormatTestPanel = dynamic(() => import("@/components/format-test-panel"), { ssr: false })
+const FormatTestPanel = dynamic(() => import("@/components/format-test-panel").then(mod => mod.FormatTestPanel), { ssr: false })
 
 export default function FormatTestPage() {
   return (
