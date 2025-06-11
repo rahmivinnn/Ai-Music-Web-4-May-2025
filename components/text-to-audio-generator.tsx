@@ -49,51 +49,41 @@ export function TextToAudioGenerator() {
     setMixedAudioUrl(null)
 
     try {
-      const result = await generateAudioWithBackgroundMusic(text, voice, emotion)
-
-      if (result.success) {
-        if (result.voiceAudioUrl) {
-          setGeneratedVoiceAudio(result.voiceAudioUrl)
-          toast({
-            title: "Voice Generated",
-            description: "Voice audio has been generated successfully.",
-          })
-        }
-
-        if (result.musicUrl) {
-          setGeneratedMusicAudio(result.musicUrl)
-          toast({
-            title: "Music Generated",
-            description: "Background music has been generated successfully.",
-          })
-        }
-      } else {
-        // Use fallback samples if API fails
-        if (result.fallbackVoiceUrl) {
-          setFallbackVoiceAudio(result.fallbackVoiceUrl)
-        }
-
-        if (result.fallbackMusicUrl) {
-          setFallbackMusicAudio(result.fallbackMusicUrl)
-        }
-
+      // Coba ElevenLabs API
+      const response = await fetch("/api/text-to-speech", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: text }),
+      })
+      const data = await response.json()
+      if (data.success && data.audioData) {
+        const audioUrl = `data:${data.contentType};base64,${data.audioData}`
+        setGeneratedVoiceAudio(audioUrl)
         toast({
-          title: "Using Sample Audio",
-          description: result.message || "API unavailable. Using sample audio instead.",
-          variant: "warning",
+          title: "Voice Generated",
+          description: "Voice audio has been generated successfully (ElevenLabs).",
         })
+      } else {
+        throw new Error(data.error || "Failed to generate audio")
       }
     } catch (error) {
-      console.error("Error generating audio:", error)
-      toast({
-        title: "Generation Failed",
-        description: error instanceof Error ? error.message : "Failed to generate audio",
-        variant: "destructive",
-      })
-
-      // Set fallback audio
-      setFallbackVoiceAudio(`/samples/${voice}-${emotion}-sample.mp3`)
-      setFallbackMusicAudio(`/samples/music-${emotion}.mp3`)
+      // Fallback ke logic lama jika gagal
+      try {
+        const result = await generateAudioWithBackgroundMusic(text, voice, emotion)
+        if (result.success) {
+          if (result.voiceAudioUrl) setGeneratedVoiceAudio(result.voiceAudioUrl)
+          if (result.musicUrl) setGeneratedMusicAudio(result.musicUrl)
+          toast({ title: "Voice Generated", description: "Voice audio has been generated successfully." })
+        } else {
+          if (result.fallbackVoiceUrl) setFallbackVoiceAudio(result.fallbackVoiceUrl)
+          if (result.fallbackMusicUrl) setFallbackMusicAudio(result.fallbackMusicUrl)
+          toast({ title: "Using Sample Audio", description: result.message || "API unavailable. Using sample audio instead.", variant: "warning" })
+        }
+      } catch (err) {
+        setFallbackVoiceAudio(`/samples/${voice}-${emotion}-sample.mp3`)
+        setFallbackMusicAudio(`/samples/music-${emotion}.mp3`)
+        toast({ title: "Generation Failed", description: error instanceof Error ? error.message : "Failed to generate audio", variant: "destructive" })
+      }
     } finally {
       setIsGenerating(false)
     }

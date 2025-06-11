@@ -51,14 +51,27 @@ export function TextToAudioForm() {
     setGeneratedAudioUrl(null)
 
     try {
-      // Simulate API call to /api/text-to-audio
-      // In a real implementation, you would use fetch or axios to make the API call
-      // const response = await fetch("/api/text-to-audio", {
-      //   method: "POST",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify({ text, genre }),
-      // })
-
+      // Coba ElevenLabs API
+      const response = await fetch("/api/text-to-speech", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: text }),
+      })
+      const data = await response.json()
+      if (data.success && data.audioData) {
+        const audioUrl = `data:${data.contentType};base64,${data.audioData}`
+        setGeneratedAudioUrl(audioUrl)
+        setIsGenerating(false)
+        toast({
+          title: "Audio generated",
+          description: "Your text has been converted to audio successfully!",
+        })
+        return
+      } else {
+        throw new Error(data.error || "Failed to generate audio")
+      }
+    } catch (err) {
+      // Fallback ke sample jika gagal
       // Simulate processing progress
       const interval = setInterval(() => {
         setProgress((prev) => {
@@ -69,39 +82,28 @@ export function TextToAudioForm() {
           return prev + 5
         })
       }, 200)
-
-      // Simulate API response after "processing" completes
       setTimeout(async () => {
         clearInterval(interval)
         setProgress(100)
-
-        // Use a sample audio file as the generated result
-        // In a real implementation, this would be the URL returned by the API
         const sampleUrl = `/samples/music-${genre}.mp3`
-
-        // Test if the audio can actually play before setting it
         const canPlay = await canAudioPlay(sampleUrl)
-
         if (canPlay) {
           setGeneratedAudioUrl(sampleUrl)
           setIsGenerating(false)
-
           toast({
             title: "Audio generated",
-            description: "Your text has been converted to audio successfully!",
+            description: "Your text has been converted to audio successfully! (Sample)",
           })
         } else {
-          throw new Error("Generated audio cannot be played")
+          setIsGenerating(false)
+          setError(`Failed to generate audio: ${err instanceof Error ? err.message : "Unknown error"}`)
+          toast({
+            title: "Audio generation failed",
+            description: "There was an error generating your audio.",
+            variant: "destructive",
+          })
         }
       }, 4000)
-    } catch (err) {
-      setIsGenerating(false)
-      setError(`Failed to generate audio: ${err instanceof Error ? err.message : "Unknown error"}`)
-      toast({
-        title: "Audio generation failed",
-        description: "There was an error generating your audio.",
-        variant: "destructive",
-      })
     }
   }
 
