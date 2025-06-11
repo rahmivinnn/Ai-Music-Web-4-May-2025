@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Download, Share2, Trash2, Search, Music, Wand2, Play, Pause } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
+import { AudioPlayer } from "@/components/audio-player"
 
 export default function MyLibraryPage() {
   const [filter, setFilter] = useState("all")
@@ -189,77 +190,30 @@ export default function MyLibraryPage() {
   }
 
   // Function to render a single item
-  const renderItem = (item: (typeof savedItems)[0]) => (
+  const renderItem = (item) => (
     <div
       key={item.id}
-      className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/30 p-4"
+      className="flex flex-col gap-2 rounded-lg border border-zinc-800 bg-zinc-900/30 p-4"
     >
       <div className="flex items-center gap-4">
-        <div className="relative group">
-          <img
-            src={item.image || "/placeholder.svg"}
-            alt={item.title}
-            className="h-16 w-16 rounded-md object-cover"
-            onError={(e) => {
-              ;(e.target as HTMLImageElement).src = "/diverse-group-making-music.png"
-            }}
-          />
-          <div
-            className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-md cursor-pointer"
-            onClick={() => handlePlayPause(item.id)}
-          >
-            {currentlyPlaying === item.id ? (
-              <Pause className="h-8 w-8 text-white" />
-            ) : (
-              <Play className="h-8 w-8 text-white" />
-            )}
-          </div>
-          {currentlyPlaying === item.id && (
-            <div className="absolute inset-0 bg-cyan-500/20 rounded-md border-2 border-cyan-500"></div>
-          )}
-        </div>
+        <img
+          src={item.image || "/placeholder.svg"}
+          alt={item.title}
+          className="w-16 h-16 rounded object-cover"
+        />
         <div>
-          <h3 className="font-medium flex items-center">
-            {item.title}
-            {item.type === "remix" ? (
-              <Music className="h-4 w-4 ml-2 text-cyan-400" />
-            ) : (
-              <Wand2 className="h-4 w-4 ml-2 text-purple-400" />
-            )}
-          </h3>
-          <p className="text-sm text-zinc-500">{item.original}</p>
-          <div className="mt-1 flex items-center gap-4 text-xs text-zinc-600">
-            <span>{item.date}</span>
-            <span>{item.duration}</span>
-          </div>
+          <div className="font-bold">{item.title}</div>
+          <div className="text-xs text-zinc-400">{item.original}</div>
+          <div className="text-xs text-zinc-500">{item.date} • {item.duration}</div>
         </div>
       </div>
-
-      <div className="flex items-center gap-2">
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-8 w-8 text-zinc-400 hover:text-cyan-400"
-          onClick={() => handleDownload(item.id)}
-        >
-          <Download className="h-4 w-4" />
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-8 w-8 text-zinc-400 hover:text-cyan-400"
-          onClick={() => handleShare(item.id)}
-        >
-          <Share2 className="h-4 w-4" />
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-8 w-8 text-zinc-400 hover:text-red-400"
-          onClick={() => handleDelete(item.id)}
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
+      <div className="mt-2">
+        <AudioPlayer
+          audioUrl={item.audioUrl || audioSamples[item.id as keyof typeof audioSamples]}
+          title={item.title}
+          showWaveform
+          showDownload
+        />
       </div>
     </div>
   )

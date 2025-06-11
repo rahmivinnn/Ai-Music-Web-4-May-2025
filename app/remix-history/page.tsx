@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Download, Share2, Trash2, Search, Play, Pause } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
+import { AudioPlayer } from "@/components/audio-player"
 
 export default function RemixHistoryPage() {
   const [filter, setFilter] = useState("all")
@@ -182,6 +183,31 @@ export default function RemixHistoryPage() {
     })
   }
 
+  const renderRemix = (remix) => (
+    <div key={remix.id} className="flex flex-col gap-2 rounded-lg border border-zinc-800 bg-zinc-900/30 p-4">
+      <div className="flex items-center gap-4">
+        <img
+          src={remix.image || "/placeholder.svg"}
+          alt={remix.title}
+          className="w-16 h-16 rounded object-cover"
+        />
+        <div>
+          <div className="font-bold">{remix.title}</div>
+          <div className="text-xs text-zinc-400">{remix.original}</div>
+          <div className="text-xs text-zinc-500">{remix.date} • {remix.duration}</div>
+        </div>
+      </div>
+      <div className="mt-2">
+        <AudioPlayer
+          audioUrl={remix.audioUrl || audioSamples[remix.id as keyof typeof audioSamples]}
+          title={remix.title}
+          showWaveform
+          showDownload
+        />
+      </div>
+    </div>
+  )
+
   return (
     <div className="container py-8">
       <div className="mb-8 flex items-center justify-between">
@@ -226,145 +252,13 @@ export default function RemixHistoryPage() {
       <h2 className="mb-6 text-2xl font-bold">Recent Remixes</h2>
 
       <div className="space-y-4">
-        {remixes.map((remix) => (
-          <div
-            key={remix.id}
-            className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/30 p-4"
-          >
-            <div className="flex items-center gap-4">
-              <div className="relative group">
-                <img
-                  src={remix.image || "/placeholder.svg"}
-                  alt={remix.title}
-                  className="h-16 w-16 rounded-md object-cover"
-                  onError={(e) => {
-                    ;(e.target as HTMLImageElement).src = "/diverse-group-making-music.png"
-                  }}
-                />
-                <div
-                  className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-md cursor-pointer"
-                  onClick={() => handlePlayPause(remix.id)}
-                >
-                  {currentlyPlaying === remix.id ? (
-                    <Pause className="h-8 w-8 text-white" />
-                  ) : (
-                    <Play className="h-8 w-8 text-white" />
-                  )}
-                </div>
-                {currentlyPlaying === remix.id && (
-                  <div className="absolute inset-0 bg-cyan-500/20 rounded-md border-2 border-cyan-500"></div>
-                )}
-              </div>
-              <div>
-                <h3 className="font-medium">{remix.title}</h3>
-                <p className="text-sm text-zinc-500">Original: {remix.original}</p>
-                <div className="mt-1 flex items-center gap-4 text-xs text-zinc-600">
-                  <span>{remix.date}</span>
-                  <span>{remix.duration}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 text-zinc-400 hover:text-cyan-400"
-                onClick={() => handleDownload(remix.id)}
-              >
-                <Download className="h-4 w-4" />
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 text-zinc-400 hover:text-cyan-400"
-                onClick={() => handleShare(remix.id)}
-              >
-                <Share2 className="h-4 w-4" />
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 text-zinc-400 hover:text-red-400"
-                onClick={() => handleDelete(remix.id)}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        ))}
+        {remixes.map(renderRemix)}
       </div>
 
       <h2 className="mb-6 mt-12 text-2xl font-bold">Most Played Remixes</h2>
 
       <div className="space-y-4">
-        {remixes.map((remix) => (
-          <div
-            key={`most-played-${remix.id}`}
-            className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/30 p-4"
-          >
-            <div className="flex items-center gap-4">
-              <div className="relative group">
-                <img
-                  src={remix.image || "/placeholder.svg"}
-                  alt={remix.title}
-                  className="h-16 w-16 rounded-md object-cover"
-                  onError={(e) => {
-                    ;(e.target as HTMLImageElement).src = "/diverse-group-making-music.png"
-                  }}
-                />
-                <div
-                  className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-md cursor-pointer"
-                  onClick={() => handlePlayPause(remix.id)}
-                >
-                  {currentlyPlaying === remix.id ? (
-                    <Pause className="h-8 w-8 text-white" />
-                  ) : (
-                    <Play className="h-8 w-8 text-white" />
-                  )}
-                </div>
-                {currentlyPlaying === remix.id && (
-                  <div className="absolute inset-0 bg-cyan-500/20 rounded-md border-2 border-cyan-500"></div>
-                )}
-              </div>
-              <div>
-                <h3 className="font-medium">{remix.title}</h3>
-                <p className="text-sm text-zinc-500">Original: {remix.original}</p>
-                <div className="mt-1 flex items-center gap-4 text-xs text-zinc-600">
-                  <span>{remix.date}</span>
-                  <span>{remix.duration}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 text-zinc-400 hover:text-cyan-400"
-                onClick={() => handleDownload(remix.id)}
-              >
-                <Download className="h-4 w-4" />
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 text-zinc-400 hover:text-cyan-400"
-                onClick={() => handleShare(remix.id)}
-              >
-                <Share2 className="h-4 w-4" />
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 text-zinc-400 hover:text-red-400"
-                onClick={() => handleDelete(remix.id)}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        ))}
+        {remixes.map(renderRemix)}
       </div>
     </div>
   )

@@ -19,6 +19,8 @@ const TEST_FORMATS = [
 export function FormatTestPanel() {
   const [selectedFormat, setSelectedFormat] = useState(TEST_FORMATS[0])
 
+  const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : ''
+
   return (
     <Card className="w-full shadow-lg border-gray-200 dark:border-gray-800">
       <CardHeader>
@@ -67,7 +69,7 @@ export function FormatTestPanel() {
       </CardContent>
 
       <CardFooter className="flex justify-between">
-        <p className="text-sm text-gray-500">Browser detected: {navigator.userAgent}</p>
+        <p className="text-sm text-gray-500">Browser detected: {userAgent}</p>
       </CardFooter>
     </Card>
   )
