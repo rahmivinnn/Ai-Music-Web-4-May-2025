@@ -61,16 +61,16 @@ Returns the generated audio file.
 ## Installation
 
 ### Frontend
-```bash
+\`\`\`bash
 npm install
 npm run dev
-```
+\`\`\`
 
 ### Backend
-```bash
+\`\`\`bash
 pip install -r requirements.txt
 python run.py
-```
+\`\`\`
 
 ## Example Prompts
 
