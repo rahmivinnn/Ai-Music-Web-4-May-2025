@@ -779,7 +779,22 @@ export default function TextToAudioPage() {
     setVoiceLoadingProgress(0)
     setMusicLoadingProgress(0)
     try {
-      // Coba ElevenLabs API
+      // 1. Coba backend Flask
+      const flaskRes = await fetch("http://localhost:5000/text-to-audio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: text }),
+      })
+      const flaskData = await flaskRes.json()
+      if (flaskData.success && flaskData.audio_url) {
+        setGeneratedVoiceAudio(flaskData.audio_url)
+        toast({
+          title: "Voice Generated",
+          description: "Voice audio has been generated successfully (Flask).",
+        })
+        return
+      }
+      // 2. Coba ElevenLabs API
       const response = await fetch("/api/text-to-speech", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -793,11 +808,12 @@ export default function TextToAudioPage() {
           title: "Voice Generated",
           description: "Voice audio has been generated successfully (ElevenLabs).",
         })
+        return
       } else {
         throw new Error(data.error || "Failed to generate audio")
       }
     } catch (error) {
-      // Fallback ke logic lama jika gagal
+      // 3. Fallback ke logic lama jika gagal
       try {
         const result = await generateAudio({ prompt: text, voice, style, quality })
         if (result.success && result.audioUrl) {

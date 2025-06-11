@@ -51,7 +51,23 @@ export function TextToAudioForm() {
     setGeneratedAudioUrl(null)
 
     try {
-      // Coba ElevenLabs API
+      // 1. Coba backend Flask
+      const flaskRes = await fetch("http://localhost:5000/text-to-audio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: text }),
+      })
+      const flaskData = await flaskRes.json()
+      if (flaskData.success && flaskData.audio_url) {
+        setGeneratedAudioUrl(flaskData.audio_url)
+        setIsGenerating(false)
+        toast({
+          title: "Audio generated",
+          description: "Your text has been converted to audio successfully! (Flask)",
+        })
+        return
+      }
+      // 2. Coba ElevenLabs API
       const response = await fetch("/api/text-to-speech", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -64,15 +80,14 @@ export function TextToAudioForm() {
         setIsGenerating(false)
         toast({
           title: "Audio generated",
-          description: "Your text has been converted to audio successfully!",
+          description: "Your text has been converted to audio successfully! (ElevenLabs)",
         })
         return
       } else {
         throw new Error(data.error || "Failed to generate audio")
       }
     } catch (err) {
-      // Fallback ke sample jika gagal
-      // Simulate processing progress
+      // 3. Fallback ke sample jika gagal
       const interval = setInterval(() => {
         setProgress((prev) => {
           if (prev >= 100) {
