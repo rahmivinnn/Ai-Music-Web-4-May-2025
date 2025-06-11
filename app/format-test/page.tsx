@@ -1,4 +1,6 @@
-import { FormatTestPanel } from "@/components/format-test-panel"
+import dynamic from "next/dynamic"
+
+const FormatTestPanel = dynamic(() => import("@/components/format-test-panel"), { ssr: false })
 
 export default function FormatTestPage() {
   return (
