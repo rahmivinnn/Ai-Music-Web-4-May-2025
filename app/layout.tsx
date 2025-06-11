@@ -5,8 +5,7 @@ import { AudioProvider } from "@/components/audio-context"
 
 export const metadata = {
   title: "Composition Converter - AI Music Remix Platform",
-  description: "Transform your audio or create entirely new tracks with our powerful AI remixing platform.",
-    generator: 'v0.dev'
+  description: "Transform your audio or create entirely new tracks with our powerful AI remixing platform."
 }
 
 export default function RootLayout({ children }) {
