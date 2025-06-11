@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Play, Plus } from "lucide-react"
 import { useState } from "react"
+import { toast } from "@/components/ui/use-toast"
 
 export function SampleLibrary({ onSampleSelect }) {
   const [playingSample, setPlayingSample] = useState(null)
@@ -75,7 +76,13 @@ export function SampleLibrary({ onSampleSelect }) {
       audio.addEventListener(
         "canplaythrough",
         () => {
-          audio.play().catch((err) => console.error("Error playing sample:", err))
+          audio.play().catch((err) => {
+            toast({
+              title: "Audio Error",
+              description: "Audio tidak dapat diputar, coba format lain atau gunakan sample.",
+              variant: "destructive",
+            })
+          })
         },
         { once: true },
       )

@@ -61,7 +61,7 @@ export function OptimizedMusicPopup({ onClose, autoCloseTime = 0 }: OptimizedMus
         setAudioError(true)
         toast({
           title: "Audio Error",
-          description: "Could not load any audio samples. Please try again later.",
+          description: "Audio tidak dapat diputar, coba format lain atau gunakan sample.",
           variant: "destructive",
         })
         return

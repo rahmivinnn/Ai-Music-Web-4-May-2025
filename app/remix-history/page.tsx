@@ -77,8 +77,8 @@ export default function RemixHistoryPage() {
       audio.onerror = (e) => {
         console.error("Audio error:", e)
         toast({
-          title: "Error",
-          description: "Failed to play audio. Please try again.",
+          title: "Audio Error",
+          description: "Audio tidak dapat diputar, coba format lain atau gunakan sample.",
           variant: "destructive",
         })
         setCurrentlyPlaying(null)
@@ -87,8 +87,8 @@ export default function RemixHistoryPage() {
       audio.play().catch((error) => {
         console.error("Error playing audio:", error)
         toast({
-          title: "Error",
-          description: "Failed to play audio. Please try again.",
+          title: "Audio Error",
+          description: "Audio tidak dapat diputar, coba format lain atau gunakan sample.",
           variant: "destructive",
         })
         setCurrentlyPlaying(null)

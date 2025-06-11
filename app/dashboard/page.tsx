@@ -184,7 +184,7 @@ export default function Dashboard() {
         console.error("Error initializing Web Audio API:", error)
         toast({
           title: "Audio Error",
-          description: "Failed to initialize audio system. Please try again.",
+          description: "Audio tidak dapat diputar, coba format lain atau gunakan sample.",
           variant: "destructive",
         })
       }
