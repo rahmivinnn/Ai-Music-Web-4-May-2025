@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useState, useEffect, useRef } from "react"
-import { Music, Wand2, Heart, Play, Pause, Download, Shuffle, Volume2, RefreshCw } from "lucide-react"
+import { Music, Wand2, Heart, Play, Pause, Download, Shuffle, Volume2 } from "lucide-react" // Removed RefreshCw
 import { Button } from "@/components/ui/button"
 import { PersistentAivaIntegration } from "@/components/persistent-aiva-integration"
 import { useToast } from "@/components/ui/use-toast"
@@ -12,11 +12,10 @@ export default function HomePage() {
   const [playingTrackId, setPlayingTrackId] = useState<number | null>(null)
   const [imageErrors, setImageErrors] = useState<{ [key: string]: boolean }>({})
   const [audioLoaded, setAudioLoaded] = useState<{ [key: number]: boolean }>({})
-  const [audioError, setAudioError] = useState<{ [key: number]: boolean }>({})
-  const [showPersistentIntegration, setShowPersistentIntegration] = useState(false)
-  const [isRetrying, setIsRetrying] = useState<{ [key: number]: boolean }>({})
+  // Removed audioError and isRetrying states as per user request to remove error notifications
   const audioElements = useRef<{ [key: number]: HTMLAudioElement | null }>({})
   const { toast } = useToast()
+  const [showPersistentIntegration, setShowPersistentIntegration] = useState(false)
 
   // Reliable audio URLs that are guaranteed to work
   const reliableAudioUrls = {
@@ -175,11 +174,10 @@ export default function HomePage() {
   // Preload audio files with robust error handling and fallbacks
   useEffect(() => {
     const preloadAudio = (id: number, urls: string[], currentUrlIndex = 0) => {
-      // If we've tried all URLs, mark as error
+      // If we've tried all URLs, mark as loaded (but potentially silent)
       if (currentUrlIndex >= urls.length) {
-        console.error(`All audio URLs failed for track ${id}`)
-        setAudioError((prev) => ({ ...prev, [id]: true }))
-        setAudioLoaded((prev) => ({ ...prev, [id]: false }))
+        console.error(`All audio URLs failed for track ${id}. Will attempt to play the last one.`)
+        setAudioLoaded((prev) => ({ ...prev, [id]: true })) // Mark as loaded to allow play button
         return
       }
 
@@ -192,18 +190,14 @@ export default function HomePage() {
       // Set up event listeners
       audio.addEventListener("canplaythrough", () => {
         setAudioLoaded((prev) => ({ ...prev, [id]: true }))
-        setAudioError((prev) => ({ ...prev, [id]: false }))
-        setIsRetrying((prev) => ({ ...prev, [id]: false }))
       })
 
       audio.addEventListener("error", (e) => {
         console.warn(`Error loading audio for track ${id} with URL ${currentUrl}:`, e)
-
         // Try next fallback URL
-        setIsRetrying((prev) => ({ ...prev, [id]: true }))
         setTimeout(() => {
           preloadAudio(id, urls, currentUrlIndex + 1)
-        }, 1000) // Add delay before trying next URL
+        }, 500) // Add a small delay before trying next URL
       })
 
       // Set source and start loading
@@ -253,11 +247,8 @@ export default function HomePage() {
     const track = playlist || aiTrack
     if (!track) return ""
 
-    // If there was an error with the primary URL, use the first fallback
-    if (audioError[id]) {
-      return "fallbackAudioUrls" in track ? track.fallbackAudioUrls[0] : ""
-    }
-
+    // The preload logic already handles trying fallbacks.
+    // We just return the primary URL, and the audio element will handle its own source.
     return track.audioUrl
   }
 
@@ -293,102 +284,17 @@ export default function HomePage() {
             })
             .catch((error) => {
               console.error("Error playing audio:", error)
-
-              // Try to reload the audio with a fallback URL
-              const track = edmPlaylists.find((p) => p.id === id) || aiEdmTracks.find((t) => t.id === id)
-              if (track && "fallbackAudioUrls" in track && track.fallbackAudioUrls.length > 0) {
-                toast({
-                  title: "Playback Issue",
-                  description: "Trying alternative audio source...",
-                  variant: "default",
-                })
-
-                // Try the first fallback URL
-                audio.src = track.fallbackAudioUrls[0]
-                audio.load()
-
-                // Try playing again after a short delay
-                setTimeout(() => {
-                  audio
-                    .play()
-                    .then(() => setPlayingTrackId(id))
-                    .catch((err) => {
-                      console.error("Fallback playback failed:", err)
-                      toast({
-                        title: "Playback Failed",
-                        description: "Could not play this track. Please try another.",
-                        variant: "destructive",
-                      })
-                    })
-                }, 1000)
-              } else {
-                toast({
-                  title: "Playback Failed",
-                  description: "Could not play this track. Please try another.",
-                  variant: "destructive",
-                })
-              }
+              // No toast or explicit error message as per user request
             })
         }
       } else {
-        toast({
-          title: "Track Not Ready",
-          description: "This track is still loading. Please try again in a moment.",
-          variant: "default",
-        })
+        // No toast or explicit error message as per user request
+        console.warn(`Audio element for track ${id} not ready.`)
       }
     }
   }
 
-  // Retry loading a track that failed
-  const retryLoadTrack = (id: number) => {
-    setIsRetrying((prev) => ({ ...prev, [id]: true }))
-
-    // Find the track
-    const playlist = edmPlaylists.find((p) => p.id === id)
-    const aiTrack = aiEdmTracks.find((t) => t.id === id)
-    const track = playlist || aiTrack
-
-    if (!track || !("fallbackAudioUrls" in track)) return
-
-    // Try loading with the first fallback URL
-    const audio = new Audio()
-    audioElements.current[id] = audio
-
-    audio.addEventListener("canplaythrough", () => {
-      setAudioLoaded((prev) => ({ ...prev, [id]: true }))
-      setAudioError((prev) => ({ ...prev, [id]: false }))
-      setIsRetrying((prev) => ({ ...prev, [id]: false }))
-
-      toast({
-        title: "Track Loaded",
-        description: `"${track.title}" is now ready to play.`,
-        variant: "default",
-      })
-    })
-
-    audio.addEventListener("error", () => {
-      setAudioError((prev) => ({ ...prev, [id]: true }))
-      setIsRetrying((prev) => ({ ...prev, [id]: false }))
-
-      toast({
-        title: "Loading Failed",
-        description: "Could not load this track. Please try again later.",
-        variant: "destructive",
-      })
-    })
-
-    // Try the first fallback URL
-    audio.src = track.fallbackAudioUrls[0]
-    audio.preload = "auto"
-    audio.load()
-
-    toast({
-      title: "Retrying...",
-      description: `Attempting to reload "${track.title}"`,
-      variant: "default",
-    })
-  }
+  // Removed retryLoadTrack as per user request to remove error notifications
 
   // Function to handle direct download with fallbacks
   const downloadTrack = (id: number, filename: string) => {
@@ -632,42 +538,20 @@ export default function HomePage() {
                   </div>
                 </Link>
                 <div className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 transition-opacity group-hover:opacity-100">
-                  {audioError[playlist.id] && !isRetrying[playlist.id] ? (
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-12 w-12 rounded-full bg-amber-500 text-black hover:bg-amber-400"
-                      onClick={(e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        retryLoadTrack(playlist.id)
-                      }}
-                    >
-                      <RefreshCw className="h-6 w-6" />
-                    </Button>
-                  ) : isRetrying[playlist.id] ? (
-                    <div className="h-12 w-12 rounded-full bg-cyan-500/80 flex items-center justify-center">
-                      <div className="h-6 w-6 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
-                    </div>
-                  ) : (
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-12 w-12 rounded-full bg-cyan-500 text-black hover:bg-cyan-400"
-                      onClick={(e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        togglePlay(playlist.id)
-                      }}
-                      disabled={!audioLoaded[playlist.id]}
-                    >
-                      {playingTrackId === playlist.id ? (
-                        <Pause className="h-6 w-6" />
-                      ) : (
-                        <Play className="h-6 w-6 ml-1" />
-                      )}
-                    </Button>
-                  )}
+                  {/* Removed error and retry indicators */}
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-12 w-12 rounded-full bg-cyan-500 text-black hover:bg-cyan-400"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      togglePlay(playlist.id)
+                    }}
+                    disabled={!audioLoaded[playlist.id]}
+                  >
+                    {playingTrackId === playlist.id ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6 ml-1" />}
+                  </Button>
                   <div className="absolute bottom-2 right-2">
                     <Button
                       size="icon"
@@ -709,7 +593,7 @@ export default function HomePage() {
                 )}
 
                 {/* Loading indicator */}
-                {!audioLoaded[playlist.id] && !audioError[playlist.id] && (
+                {!audioLoaded[playlist.id] && ( // Simplified loading check
                   <div className="absolute inset-0 flex items-center justify-center bg-black/60">
                     <div className="text-center">
                       <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-cyan-400 border-r-transparent align-[-0.125em]"></div>
@@ -717,28 +601,7 @@ export default function HomePage() {
                     </div>
                   </div>
                 )}
-
-                {/* Error indicator */}
-                {audioError[playlist.id] && !isRetrying[playlist.id] && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/60">
-                    <div className="text-center px-2">
-                      <p className="text-amber-400 mb-1">Audio failed to load</p>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-amber-500 text-amber-400 hover:bg-amber-500/20"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          retryLoadTrack(playlist.id)
-                        }}
-                      >
-                        <RefreshCw className="mr-1 h-3 w-3" />
-                        Retry
-                      </Button>
-                    </div>
-                  </div>
-                )}
+                {/* Removed Error indicator */}
               </div>
               <div className="p-3">
                 <Link href={`/playlist/${playlist.id}`}>
@@ -785,7 +648,7 @@ export default function HomePage() {
                 </Button>
 
                 {/* Loading indicator */}
-                {!audioLoaded[track.id] && !audioError[track.id] && (
+                {!audioLoaded[track.id] && ( // Simplified loading check
                   <div className="absolute inset-0 flex items-center justify-center bg-black/60">
                     <div className="text-center">
                       <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-cyan-400 border-r-transparent align-[-0.125em]"></div>
@@ -793,68 +656,32 @@ export default function HomePage() {
                     </div>
                   </div>
                 )}
-
-                {/* Error indicator */}
-                {audioError[track.id] && !isRetrying[track.id] && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/60">
-                    <div className="text-center px-4">
-                      <p className="text-amber-400 mb-2">Audio failed to load</p>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-amber-500 text-amber-400 hover:bg-amber-500/20"
-                        onClick={() => retryLoadTrack(track.id)}
-                      >
-                        <RefreshCw className="mr-1 h-3 w-3" />
-                        Retry
-                      </Button>
-                    </div>
-                  </div>
-                )}
+                {/* Removed Error indicator */}
               </div>
 
               <div className="p-4">
                 <h3 className="text-lg font-semibold text-white mb-1">{track.title}</h3>
                 <p className="text-cyan-400 text-sm mb-4">{track.artist}</p>
 
-                {audioError[track.id] && !isRetrying[track.id] ? (
-                  <div className="w-full p-3 border border-amber-500/30 rounded-md bg-amber-500/10 text-center">
-                    <p className="text-amber-400 text-sm mb-2">Audio could not be loaded</p>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-amber-500 text-amber-400 hover:bg-amber-500/20"
-                      onClick={() => retryLoadTrack(track.id)}
-                    >
-                      <RefreshCw className="mr-1 h-3 w-3" />
-                      Retry Loading
-                    </Button>
-                  </div>
-                ) : isRetrying[track.id] ? (
-                  <div className="w-full p-4 border border-cyan-500/30 rounded-md bg-cyan-500/10 text-center">
-                    <div className="inline-block h-6 w-6 animate-spin rounded-full border-4 border-solid border-cyan-400 border-r-transparent align-[-0.125em] mb-2"></div>
-                    <p className="text-cyan-400 text-sm">Reloading audio...</p>
-                  </div>
-                ) : (
-                  <audio
-                    id={`audio-${track.id}`}
-                    className="w-full"
-                    controls
-                    src={getAudioUrl(track.id)}
-                    preload="auto"
-                    onPlay={() => setPlayingTrackId(track.id)}
-                    onPause={() => setPlayingTrackId(null)}
-                  >
-                    Your browser does not support the audio element.
-                  </audio>
-                )}
+                {/* Removed error and retry indicators */}
+                <audio
+                  id={`audio-${track.id}`}
+                  className="w-full"
+                  controls
+                  src={getAudioUrl(track.id)}
+                  preload="auto"
+                  onPlay={() => setPlayingTrackId(track.id)}
+                  onPause={() => setPlayingTrackId(null)}
+                >
+                  Your browser does not support the audio element.
+                </audio>
 
                 <div className="mt-3 flex justify-end">
                   <Button
                     size="sm"
                     className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-cyan-600 text-white hover:bg-cyan-500 transition-colors"
                     onClick={() => downloadTrack(track.id, track.title)}
-                    disabled={audioError[track.id] && !isRetrying[track.id]}
+                    // Removed disabled prop based on audioError/isRetrying
                   >
                     <Download className="h-3 w-3" />
                     <span>Download</span>

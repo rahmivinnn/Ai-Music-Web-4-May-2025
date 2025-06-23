@@ -38,6 +38,13 @@ export function Sidebar() {
           <span>My Library</span>
         </Link>
         <Link
+          href="/remix-history"
+          className={`sidebar-link ${pathname === "/remix-history" ? "active bg-cyan-500/10 text-cyan-400" : ""}`}
+        >
+          <History className="h-5 w-5" />
+          <span>Remix History</span>
+        </Link>
+        <Link
           href="/subscription"
           className={`sidebar-link ${pathname === "/subscription" ? "active bg-cyan-500/10 text-cyan-400" : ""}`}
         >

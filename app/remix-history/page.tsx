@@ -4,7 +4,7 @@ import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Download, Share2, Trash2, Search, Play, Pause } from "lucide-react"
+import { Search } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { AudioPlayer } from "@/components/audio-player"
 
@@ -76,21 +76,11 @@ export default function RemixHistoryPage() {
       audio.onended = () => setCurrentlyPlaying(null)
       audio.onerror = (e) => {
         console.error("Audio error:", e)
-        toast({
-          title: "Audio Error",
-          description: "Audio tidak dapat diputar, coba format lain atau gunakan sample.",
-          variant: "destructive",
-        })
         setCurrentlyPlaying(null)
       }
 
       audio.play().catch((error) => {
         console.error("Error playing audio:", error)
-        toast({
-          title: "Audio Error",
-          description: "Audio tidak dapat diputar, coba format lain atau gunakan sample.",
-          variant: "destructive",
-        })
         setCurrentlyPlaying(null)
       })
 
@@ -186,15 +176,13 @@ export default function RemixHistoryPage() {
   const renderRemix = (remix) => (
     <div key={remix.id} className="flex flex-col gap-2 rounded-lg border border-zinc-800 bg-zinc-900/30 p-4">
       <div className="flex items-center gap-4">
-        <img
-          src={remix.image || "/placeholder.svg"}
-          alt={remix.title}
-          className="w-16 h-16 rounded object-cover"
-        />
+        <img src={remix.image || "/placeholder.svg"} alt={remix.title} className="w-16 h-16 rounded object-cover" />
         <div>
           <div className="font-bold">{remix.title}</div>
           <div className="text-xs text-zinc-400">{remix.original}</div>
-          <div className="text-xs text-zinc-500">{remix.date} • {remix.duration}</div>
+          <div className="text-xs text-zinc-500">
+            {remix.date} • {remix.duration}
+          </div>
         </div>
       </div>
       <div className="mt-2">
@@ -251,15 +239,11 @@ export default function RemixHistoryPage() {
 
       <h2 className="mb-6 text-2xl font-bold">Recent Remixes</h2>
 
-      <div className="space-y-4">
-        {remixes.map(renderRemix)}
-      </div>
+      <div className="space-y-4">{remixes.map(renderRemix)}</div>
 
       <h2 className="mb-6 mt-12 text-2xl font-bold">Most Played Remixes</h2>
 
-      <div className="space-y-4">
-        {remixes.map(renderRemix)}
-      </div>
+      <div className="space-y-4">{remixes.map(renderRemix)}</div>
     </div>
   )
 }
